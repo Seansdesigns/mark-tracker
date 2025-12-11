@@ -1,0 +1,3157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#2196F3" />
+
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./service-worker.js');
+    });
+  }
+</script>
+
+
+  <meta charset="UTF-8" />
+  <title>Mark Tracker - Warehouse Live</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    :root {
+      --bg: #f3f4f6;
+      --card-bg: #ffffff;
+      --border: #e5e7eb;
+      --text-main: #111827;
+      --text-muted: #6b7280;
+      --accent: #2563eb;
+      --accent-soft: #dbeafe;
+      --danger: #dc2626;
+      --success: #16a34a;
+      --warning: #d97706;
+    }
+
+	.modal {
+  position: fixed;
+  top: 0; left: 0;
+  width:100%; height:100%;
+  background: rgba(0,0,0,0.5);
+  display:flex;
+  justify-content:center;
+  align-items:center;
+}
+
+.modal.hidden { display:none; }
+
+.modal-content {
+  background:#fff;
+  padding:20px;
+  width:400px;
+  border-radius:8px;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+
+.hidden {
+  display: none;
+}
+
+.mark-details-card {
+  background: #fff;
+  width: 360px;
+  max-width: 90%;
+  padding: 14px;
+  border-radius: 6px;
+  position: relative;
+  font-size: 13px;
+}
+
+.close-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  border: none;
+  background: none;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.mark-details-card h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.late-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #fff;
+  background: #dc2626;
+  border-radius: 999px;
+}
+
+.warehouse-toggle {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.warehouse-toggle button {
+  padding: 4px 10px;
+  font-size: 12px;
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.warehouse-toggle button.active {
+  background: #111827;
+  color: #fff;
+  border-color: #111827;
+}
+
+
+/* Warehouse workflow colors */
+.cal-break {
+  background-color: #dbeafe; /* light blue */
+}
+
+.cal-loading {
+  background-color: #bbf7d0; /* light green */
+}
+
+.cal-loaded {
+  background-color: #e5e7eb;
+}
+
+/* Keep text readable */
+.wh-cell {
+  color: #111827;
+}
+
+
+
+
+    /* ======================================================
+       🔥 BREAK TABLE ACTIONS COLUMN — PERMANENT FIX
+       ====================================================== */
+
+    /* Prevent column collapse caused by grouped header rows */
+    #breakSection table {
+      table-layout: auto !important;
+    }
+
+    /* Force last column (Actions) to always be visible */
+    #breakSection td:last-child,
+    #breakSection th:last-child {
+      width: 90px !important;
+      min-width: 90px !important;
+      max-width: 120px !important;
+      display: table-cell !important;
+      visibility: visible !important;
+      overflow: visible !important;
+      white-space: nowrap !important;
+    }
+
+    /* Improve button sizing in Actions column */
+    #breakSection td:last-child button {
+      padding: 4px 10px !important;
+      font-size: 12px !important;
+      border-radius: 6px !important;
+    }
+
+.snapshot-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.kpi {
+  background: #f9fafb;
+  padding: 8px;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.kpi strong {
+  font-size: 18px;
+  display: block;
+}
+
+.snapshot-flow {
+  margin: 8px 0 16px;
+  font-size: 13px;
+}
+
+
+    /* ===============================================
+       BASE STYLES
+       =============================================== */
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text-main);
+    }
+
+    .app-shell {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 12px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .top-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .badge-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .badge {
+      padding: 2px 6px;
+      border-radius: 999px;
+      font-size: 11px;
+      border: 1px solid var(--border);
+      background: #f9fafb;
+    }
+
+    .badge-label {
+      font-weight: 600;
+    }
+
+    .tab-bar {
+      display: flex;
+      gap: 4px;
+      margin: 8px 0;
+      flex-wrap: wrap;
+    }
+
+    .tab-btn {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 5px 10px;
+      font-size: 13px;
+      background: #fff;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .tab-btn.active {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .tab-badge {
+      background: #e5e7eb;
+      border-radius: 999px;
+      padding: 0 6px;
+      font-size: 11px;
+    }
+
+    .section {
+      display: none;
+      margin-top: 10px;
+    }
+
+    .section.active {
+      display: block;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      padding: 8px;
+      margin-bottom: 8px;
+    }
+
+    .card-header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+
+    .card-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 6px;
+      font-size: 13px;
+      margin-top: 4px;
+    }
+
+    .muted {
+      color: var(--text-muted);
+    }
+
+    .btn,
+    .btn-outline,
+    .btn-ghost,
+    .btn-sm {
+      font-size: 12px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: #fff;
+      padding: 4px 8px;
+      cursor: pointer;
+    }
+
+    .btn-outline {
+      background: #fff;
+    }
+
+    .btn-ghost {
+      background: transparent;
+      border-color: transparent;
+      color: var(--text-muted);
+    }
+
+    .btn-sm {
+      padding: 2px 6px;
+    }
+
+    .btn-danger {
+      border-color: var(--danger);
+      color: var(--danger);
+    }
+
+    .btn-primary {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: minmax(0, 1.4fr) minmax(0, 2fr);
+      gap: 10px;
+    }
+
+    .input-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 6px;
+      align-items: center;
+    }
+
+    .input-row label {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .input-row input,
+    .input-row select {
+      font-size: 13px;
+      padding: 3px 6px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+
+    .input-small {
+      max-width: 130px;
+    }
+
+    .table-wrap {
+      background: #fff;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      overflow: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    th,
+    td {
+      padding: 4px 6px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #f9fafb;
+      font-weight: 600;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    tr.completed {
+      background: #ecfdf5;
+    }
+
+    tr.in-progress {
+      background: #fef3c7;
+    }
+
+    .search-input {
+      width: 100%;
+      max-width: 220px;
+      font-size: 13px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+    }
+
+    .search-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin: 6px 0;
+      gap: 6px;
+    }
+
+    .calendar-header {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+    }
+
+    .calendar-day-header {
+      font-size: 12px;
+      font-weight: 600;
+      text-align: center;
+      padding: 4px;
+      background: #e5e7eb;
+      border-radius: 4px;
+    }
+
+    .calendar-cell {
+      min-height: 85px;
+      background: #ffffff;
+      padding: 4px;
+      border-radius: 4px;
+      border: 1px solid #e5e7eb;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .calendar-cell.today {
+      background: #e0f2fe;
+    }
+
+    .calendar-day-number {
+      font-weight: 600;
+      margin-bottom: 4px;
+      font-size: 12px;
+    }
+
+    .calendar-marks {
+      font-size: 11px;
+      overflow: hidden;
+    }
+
+    .calendar-mark {
+      margin-bottom: 3px;
+    }
+
+    @media (max-width: 800px) {
+      .grid-2 {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+	
+	/* === CALENDAR DOTS & LEGEND === */
+.calendar-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 4px;
+}
+
+.dot-notstarted { background: #d93025; }   /* red */
+.dot-ready      { background: #fbbc04; }   /* yellow */
+.dot-inprogress { background: #4285f4; }   /* blue */
+.dot-completed  { background: #34a853; }   /* green */
+.dot-cleared    { background: #a142f4; }   /* purple */
+.dot-loaded     { background: #000000; }   /* black */
+
+.calendar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 10px;
+  font-size: 12px;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.warehouse-map {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.zone {
+  border: 1px solid #d1d5db;
+  padding: 6px;
+}
+
+.zone h4 {
+  text-align: center;
+  font-size: 12px;
+  margin: 4px 0;
+}
+
+.wh-row {
+  display: grid;
+  grid-template-columns: 42px 1fr;
+  border-bottom: 1px solid #e5e7eb;
+  min-height: 28px;
+}
+
+.wh-label {
+  font-size: 10px;
+  text-align: right;
+  padding-right: 6px;
+  color: #374151;
+}
+
+.wh-cell {
+  font-size: 11px;
+  padding: 3px 6px;
+  border-left: 1px solid #e5e7eb;
+}
+
+/* calendar colors reused */
+.cal-ready { background:#e0f2fe; }
+.cal-inprogress { background:#fef3c7; }
+.cal-completed { background:#bbf7d0; }
+.cal-loaded { background:#bae6fd; }
+.cal-default { background:#f3f4f6; }
+
+.wh-empty {
+  background:#f3f4f6;
+  color:#9ca3af;
+}
+
+
+	/* ============================================================
+   MOBILE RESPONSIVE LAYOUT
+   Applies to devices under 700px wide
+   ============================================================ */
+@media (max-width: 700px) {
+
+  /* TAB BAR */
+  .tab-bar {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .tab-btn {
+    flex: 1 1 45%;
+    text-align: center;
+    font-size: 14px;
+    padding: 8px;
+  }
+
+  /* GENERAL TEXT & INPUTS */
+  input, select, button, textarea {
+    font-size: 16px; /* stops iPhone from zooming */
+  }
+  .card {
+    padding: 10px;
+  }
+
+  /* BREAK/LOADING TABLES */
+  table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    font-size: 13px;
+  }
+  th, td {
+    padding: 6px 4px;
+    white-space: nowrap;
+  }
+
+  /* CALENDAR GRID */
+  .calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+  }
+  .calendar-cell {
+    min-height: 70px;
+    padding: 4px;
+  }
+  .calendar-day-number {
+    font-size: 14px;
+  }
+
+  .calendar-marks {
+    font-size: 11px;
+    max-height: 70px;
+    overflow-y: auto;
+  }
+
+  /* MAKE DOTS LARGER ON MOBILE */
+  .calendar-dot {
+    width: 12px;
+    height: 12px;
+  }
+
+  /* MODAL (Calendar Edit Modal) */
+  #calendarEditModal {
+    width: 100%;
+    height: 100%;
+    left: 0;
+    top: 0;
+    padding: 15px;
+    overflow-y: auto;
+  }
+  #modalMarksList .card {
+    font-size: 14px;
+  }
+
+  /* SEARCH BOX */
+  .search-box input {
+    width: 100%;
+    padding: 10px;
+    font-size: 16px;
+  }
+
+  /* ADD MARK FORM */
+  .form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  
+  /* ===== FIX ONLY BREAK + LOADING TABLES ===== */
+
+/* Break table */
+#breakSection table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+#breakSection th,
+#breakSection td {
+  vertical-align: middle;
+}
+
+#breakSection input,
+#breakSection select {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 13px;
+}
+
+/* Loading table */
+#loadingSection table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+#loadingSection th,
+#loadingSection td {
+  vertical-align: middle;
+}
+
+#loadingSection input,
+#loadingSection select {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 13px;
+}
+
+  
+}
+.calendar-legend {
+  margin: 12px 0 10px;
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.legend-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+/* Color mapping */
+.cal-break { background: #0066ff; }      /* Blue */
+.cal-loading { background: #00cc66; }    /* Green */
+.cal-completed { background: #9900cc; }  /* Purple */
+.cal-cleared { background: #ff9900; }    /* Orange */
+.cal-loaded { background: #000000; }     /* Black */
+
+
+	
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <div class="top-row">
+      <h1>Mark Tracker — Warehouse Live</h1>
+      <div class="badge-row">
+        <span class="badge">
+          <span class="badge-label">Break</span> <span id="badge-break">0</span>
+        </span>
+        <span class="badge">
+          <span class="badge-label">Loading</span> <span id="badge-loading">0</span>
+        </span>
+        <span class="badge">
+          <span class="badge-label">Completed</span> <span id="badge-completed">0</span>
+        </span>
+      </div>
+    </div>
+
+    <div class="tab-bar">
+  <button class="tab-btn" data-tab="allSection">All</button>
+  <button class="tab-btn" data-tab="breakSection">
+    Break / Build <span class="tab-badge" id="tabBadgeBreak">0</span>
+  </button>
+  <button class="tab-btn" data-tab="loadingSection">
+    Loading <span class="tab-badge" id="tabBadgeLoading">0</span>
+  </button>
+  <button class="tab-btn" data-tab="completedSection">
+    Completed <span class="tab-badge" id="tabBadgeCompleted">0</span>
+  </button>
+  <button class="tab-btn" data-tab="warehouseSection">Warehouse</button>
+  <button class="tab-btn active" data-tab="calendarSection">Calendar</button>
+    <button class="tab-btn" data-tab="reportsSection">Reports</button>
+	<button class="tab-btn" data-tab="snapshotSection">Ops Snapshot</button>
+
+</div>
+
+<!-- Sync Button -->
+<div style="margin: 10px 0; text-align: right;">
+  <button class="btn-outline" onclick="manualSync()">🔄 Sync Now</button>
+</div>
+
+
+    <!-- ========== ALL MARKS SECTION ========== -->
+    <div id="allSection" class="section">
+      <div class="grid-2">
+        <div>
+          <div class="card">
+            <h3 style="margin:0 0 6px;font-size:14px;">Add New Mark</h3>
+            <form id="addMarkForm" onsubmit="handleAddMark(event)">
+              <div class="input-row">
+                <label>MARK</label>
+                <input id="mark" class="input-small" required />
+              </div>
+              <div class="input-row">
+                <label>Order ID</label>
+                <input id="orderId" class="input-small" required />
+              </div>
+              <div class="input-row">
+                <label>Bale Count</label>
+                <input id="baleCount" type="number" class="input-small" required />
+              </div>
+              <div class="input-row">
+                <label>Location</label>
+                <input id="location" class="input-small" />
+              </div>
+              <div class="input-row">
+                <label>Date to Load</label>
+                <input id="dateToLoad" type="date" class="input-small" />
+              </div>
+              <div class="input-row">
+                <label>
+                  <input id="readyToBreak" type="checkbox" /> Ready to Break
+                </label>
+              </div>
+              <div class="input-row">
+                <button type="submit" class="btn-primary btn-sm">Add Mark</button>
+                <button type="button" class="btn-ghost btn-sm" onclick="resetAddForm()">Reset</button>
+              </div>
+            </form>
+          </div>
+        </div>
+        <div>
+          <div class="search-row">
+            <input
+              id="searchAllMarks"
+              class="search-input"
+              placeholder="Search mark, order, location..."
+              oninput="renderAllMarks()"
+            />
+          </div>
+          <div id="allMarksList"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== BREAK / BUILD SECTION ========== -->
+    <div id="breakSection" class="section">
+      <div class="card">
+        <div class="search-row">
+          <h3 style="margin:0;font-size:14px;">Break / Build</h3>
+          <input
+            id="searchBreak"
+            class="search-input"
+            placeholder="Search..."
+            oninput="renderBreakTable()"
+          />
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>MARK</th>
+                <th>Order ID</th>
+                <th>Bales</th>
+                <th>Location</th>
+                <th>Ready?</th>
+                <th>Status</th>
+                <th>Breakers</th>
+                <th>Hauler</th>
+                <th>Completed</th>
+                <th>Date to Load</th>
+                <th>Clear Date</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="breakTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== LOADING SECTION ========== -->
+    <div id="loadingSection" class="section">
+      <div class="card">
+        <div class="search-row">
+          <h3 style="margin:0;font-size:14px;">Loading</h3>
+          <input
+            id="searchLoading"
+            class="search-input"
+            placeholder="Search..."
+            oninput="renderLoadingTable()"
+          />
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>MARK</th>
+                <th>Order ID</th>
+                <th>Bales</th>
+                <th>Location</th>
+                <th>Date to Load</th>
+                <th>Clear Date</th>
+                <th>Date Loaded</th>
+                <th>Load Status</th>
+                <th>Loaded By</th>
+                <th>Container</th>
+                <th>Vehicle ID</th>
+                <th>Truck Line</th>
+                <th>Driver</th>
+                <th>Driver Phone</th>
+              </tr>
+            </thead>
+            <tbody id="loadingTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== COMPLETED SECTION ========== -->
+    <div id="completedSection" class="section">
+      <div class="card">
+        <div class="search-row">
+          <h3 style="margin:0;font-size:14px;">Completed Loads</h3>
+          <input
+            id="searchCompleted"
+            class="search-input"
+            placeholder="Search..."
+            oninput="renderCompletedTable()"
+          />
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>MARK</th>
+                <th>Order ID</th>
+                <th>Bales</th>
+                <th>Location</th>
+                <th>Break Completed</th>
+                <th>Clear Date</th>
+                <th>Date Loaded</th>
+                <th>Loaded By</th>
+                <th>Container</th>
+                <th>Vehicle ID</th>
+                <th>Truck Line</th>
+                <th>Driver</th>
+                <th>Driver Phone</th>
+              </tr>
+            </thead>
+            <tbody id="completedTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== WAREHOUSE SECTION ========== -->
+<div id="warehouseSection" class="section">
+  <div class="card">
+    <h3 style="margin:0 0 8px;font-size:14px;">Warehouse Map</h3>
+
+    <div class="warehouse-toggle">
+      <button id="whViewVisual" class="active" onclick="setWarehouseView('visual')">
+        Visual Board
+      </button>
+      <button id="whViewCompact" onclick="setWarehouseView('compact')">
+        Compact List
+      </button>
+    </div>
+
+    <div id="warehouseMap" class="warehouse-map"></div>
+  </div>
+</div>
+
+
+<!-- ========== REPORTS SECTION ========== -->
+<div id="reportsSection" class="section">
+  <div class="card">
+    <h3 style="margin:0 0 8px;font-size:14px;">Reports</h3>
+    <p class="muted" style="font-size:12px;">
+      Performance snapshots by breaker, hauler, loader, container type, and on-time vs late pickup.
+    </p>
+
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px;">
+      <span style="font-size:12px;">Snapshot:</span>
+      <button class="btn-sm" onclick="setReportPeriod('daily')">Daily</button>
+      <button class="btn-sm" onclick="setReportPeriod('weekly')">Weekly</button>
+      <button class="btn-sm" onclick="setReportPeriod('monthly')">Monthly</button>
+	  <button class="btn-sm" onclick="setReportPeriod('yearly')">Total Year</button>
+
+
+      <span style="font-size:12px;margin-left:12px;">Base on:</span>
+      <select id="reportDateBasis" class="search" style="max-width:140px;"
+              onchange="renderReports()">
+        <option value="loaded">Date Loaded</option>
+        <option value="completed">Date Completed</option>
+      </select>
+
+      <button class="btn-sm" style="margin-left:auto;" onclick="exportReportsAsPDF()">
+        Export Snapshot as PDF
+      </button>
+    </div>
+  </div>
+
+  <div class="card" id="reportsContent" style="font-size:12px;">
+    <!-- Populated by renderReports() -->
+    <p class="muted">No data yet.</p>
+  </div>
+</div>
+	
+  <!-- ========== CALENDAR SECTION ========== -->
+<div id="calendarSection" class="section active">
+    <!-- ⭐ Legend belongs ONLY here -->
+  <div id="calendarLegend" class="calendar-legend">
+    <span class="legend-item">
+      <span class="legend-swatch cal-break"></span> Break / Build
+    </span>
+    <span class="legend-item">
+      <span class="legend-swatch cal-loading"></span> Loading
+    </span>
+    <span class="legend-item">
+      <span class="legend-swatch cal-completed"></span> Completed
+    </span>
+    <span class="legend-item">
+      <span class="legend-swatch cal-cleared"></span> Cleared
+    </span>
+    <span class="legend-item">
+      <span class="legend-swatch cal-loaded"></span> Loaded
+    </span>
+  </div>
+  
+  <div class="card">
+    <div class="calendar-header">
+      <button class="btn-outline btn-sm" onclick="prevMonth()">←</button>
+      <span id="calendarMonthYear"></span>
+      <button class="btn-outline btn-sm" onclick="nextMonth()">→</button>
+    </div>
+
+    <div id="calendarGrid" class="calendar-grid"></div>
+  </div>
+</div>
+
+  <!-- ========== snapshot SECTION ========== -->
+	<div id="snapshotSection" class="section" style="display:none;"></div>
+  <div id="snapshotContent"></div>
+</div>
+
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ===== GLOBALS & CONFIG =====
+    let isUserEditing = false;
+	let marks = [];
+    let lastSync = 0;
+    const STORAGE_KEY = 'markTrackerData.v5';
+    const STORAGE_TS_KEY = 'markTrackerLastSync.v5';
+    const API_BASE =
+      'https://script.google.com/macros/s/AKfycbw10SBKQxATzLp_lU07B0K5OaeGf4OpF8PDF4byihFQ0QXsFM0lLQY5OC3awPI8c-PP9g/exec';
+
+    let currentCalendarYear;
+    let currentCalendarMonth;
+    let tabButtons;
+    let tabSections;
+
+    	
+	// USER EDIT DETECTION (to stop refresh from interrupting typing)
+
+document.addEventListener("focusin", (e) => {
+  if (
+    e.target.tagName === "INPUT" ||
+    e.target.tagName === "SELECT" ||
+    e.target.tagName === "TEXTAREA"
+  ) {
+    isUserEditing = true;
+  }
+});
+
+document.addEventListener("focusout", () => {
+  setTimeout(() => {
+    isUserEditing = false;
+  }, 200); // prevent flicker
+});
+
+	
+    const monthNames = [
+      'January','February','March','April','May','June',
+      'July','August','September','October','November','December'
+    ];
+    const dayNamesShort = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+    // ===== DATE NORMALIZATION =====
+    function normalizeDateString(val) {
+      if (!val) return '';
+      if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)) {
+        return val;
+      }
+      const d = new Date(val);
+      if (isNaN(d.getTime())) return '';
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+
+    function normalizeMarkFromServer(copy) {
+      copy = { ...copy };
+
+      // normalize dates
+      copy.dateToLoad    = normalizeDateString(copy.dateToLoad);
+      copy.dateCompleted = normalizeDateString(copy.dateCompleted);
+      copy.clearDate     = normalizeDateString(copy.clearDate);
+      copy.dateLoaded    = normalizeDateString(copy.dateLoaded);
+
+      // Fix readyToBreak type
+      if (typeof copy.readyToBreak !== 'boolean') {
+        copy.readyToBreak =
+          copy.readyToBreak === true ||
+          copy.readyToBreak === 'TRUE' ||
+          copy.readyToBreak === 'Yes';
+      }
+
+      // 🔥 FIX: If it has a clearDate but no "cleared" flag, restore it
+      if (copy.clearDate && !copy.cleared) {
+        copy.cleared = true;
+      }
+
+      // Ensure basic defaults exist
+      if (!copy.breakStatus) copy.breakStatus = copy.readyToBreak ? 'Ready' : 'Not Started';
+      if (!copy.loadingStatus) copy.loadingStatus = 'Not Loaded';
+
+      return copy;
+    }
+
+    // ===== DEDUPE =====
+    function dedupeMarks(arr) {
+      if (!Array.isArray(arr)) return [];
+
+      const map = {};
+
+      arr.forEach(m => {
+        if (!m) return;
+
+        // Prefer stable id if present
+        let key;
+        if (m.id) {
+          key = 'id:' + m.id;
+        } else {
+          // Fallback composite key if backend changes ids
+          const mark = (m.mark || '').toString().trim().toUpperCase();
+          const orderId = (m.orderId || '').toString().trim();
+          const loc = (m.location || '').toString().trim();
+          const dtl = normalizeDateString(m.dateToLoad || '');
+          key = `mk:${mark}|ord:${orderId}|loc:${loc}|dtl:${dtl}`;
+        }
+
+        const existing = map[key];
+        if (!existing) {
+          map[key] = m;
+        } else {
+          // Keep the "newer" one based on createdAt if possible
+          const ea = existing.createdAt || '';
+          const na = m.createdAt || '';
+          if (na > ea) {
+            map[key] = m;
+          }
+        }
+      });
+
+      return Object.values(map);
+    }
+
+    // ===== LOCAL STORAGE =====
+    function loadData() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          marks = Array.isArray(parsed) ? dedupeMarks(parsed) : [];
+        } else {
+          marks = [];
+        }
+      } catch (e) {
+        console.error('Error loading data', e);
+        marks = [];
+      }
+
+      // load lastSync timestamp if stored
+      try {
+        const tsRaw = localStorage.getItem(STORAGE_TS_KEY);
+        if (tsRaw) {
+          const n = Number(tsRaw);
+          if (!Number.isNaN(n) && n > 0) {
+            lastSync = n;
+          }
+        }
+      } catch (e) {
+        console.error('Error loading lastSync', e);
+      }
+    }
+
+    function saveData() {
+      marks = dedupeMarks(marks);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(marks));
+      renderAll();
+    }
+
+   // ===== SHEETS SYNC =====
+async function loadMarksFromSheets() {
+  // Start from whatever's local
+  loadData();
+  renderAll();
+
+  // ✅ Snapshot refresh (local)
+  let snapshotSection = document.getElementById('snapshotSection');
+  if (snapshotSection?.classList.contains('active')) {
+    renderSnapshot();
+  }
+
+  if (!API_BASE) return;
+
+  try {
+    const res = await fetch(API_BASE + '?action=loadAll');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+
+    if (Array.isArray(data.marks)) {
+      let incoming = data.marks.map(normalizeMarkFromServer);
+      incoming = dedupeMarks(incoming);
+
+      marks = incoming;
+
+      if (data.timestamp) {
+        lastSync = data.timestamp;
+        try {
+          localStorage.setItem(STORAGE_TS_KEY, String(lastSync));
+        } catch (e) {
+          console.error('Error saving lastSync', e);
+        }
+      }
+
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(marks));
+
+      renderAll();
+
+      // ✅ ✅ Snapshot refresh (server data)
+      snapshotSection = document.getElementById('snapshotSection');
+      if (snapshotSection?.classList.contains('active')) {
+        renderSnapshot();
+      }
+    } else {
+      console.warn('Unexpected response from Sheets API', data);
+    }
+  } catch (err) {
+    console.error('Error fetching from Google Sheets:', err);
+  }
+}
+
+
+    async function deltaSync() {
+      if (!API_BASE || !lastSync) return;
+
+      try {
+        const res = await fetch(API_BASE + '?action=delta&since=' + lastSync);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const delta = await res.json();
+
+        if (Array.isArray(delta.updates)) {
+          delta.updates.forEach(raw => {
+            const update = normalizeMarkFromServer(raw);
+
+			
+			// Try to match by id first
+            let idx = -1;
+            if (update.id) {
+              idx = marks.findIndex(m => m.id === update.id);
+            }
+
+            if (idx === -1) {
+              // fallback match by composite key
+              const mark = (update.mark || '').toString().trim().toUpperCase();
+              const orderId = (update.orderId || '').toString().trim();
+              const loc = (update.location || '').toString().trim();
+              const dtl = normalizeDateString(update.dateToLoad || '');
+
+              idx = marks.findIndex(m =>
+                (m.mark || '').toString().trim().toUpperCase() === mark &&
+                (m.orderId || '').toString().trim() === orderId &&
+                (m.location || '').toString().trim() === loc &&
+                normalizeDateString(m.dateToLoad || '') === dtl
+              );
+            }
+
+            if (idx !== -1) {
+              marks[idx] = update;
+            } else {
+              marks.push(update);
+            }
+          });
+        }
+
+        if (Array.isArray(delta.deletes)) {
+          marks = marks.filter(m => !delta.deletes.includes(m.id));
+        }
+
+        // dedupe after applying updates/deletes
+        marks = dedupeMarks(marks);
+
+        if (delta.timestamp) {
+          lastSync = delta.timestamp;
+          try {
+            localStorage.setItem(STORAGE_TS_KEY, String(lastSync));
+          } catch (e) {
+            console.error('Error saving lastSync', e);
+          }
+        }
+
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(marks));
+        renderAll();
+      } catch (err) {
+        console.error('Delta sync failed:', err);
+      }
+    }
+
+	// ===== WRITE SINGLE MARK TO SHEETS =====
+async function pushMarkToSheets(mark) {
+  try {
+    const res = await fetch(API_BASE + '?action=updateOne', {
+      method: "POST",
+      body: JSON.stringify(mark),
+    });
+
+    const data = await res.json();
+        return data;
+  } catch (err) {
+    console.error("Failed to push mark to sheet:", err);
+  }
+}
+
+function openMarkDetails(mark) {
+  const overlay = document.getElementById('markDetailsOverlay');
+  const content = document.getElementById('markDetailsContent');
+  if (!overlay || !content) return;
+
+  const daysWaiting = getDaysWaiting(mark);
+
+  content.innerHTML = `
+    <h3>${mark.mark}</h3>
+    <p>
+      <strong>Order:</strong> ${mark.orderId || ''}<br>
+      <strong>Bales:</strong> ${mark.baleCount}<br>
+      <strong>Location:</strong> ${mark.location}<br>
+      <strong>Break Status:</strong> ${mark.breakStatus}<br>
+      <strong>Loading Status:</strong> ${mark.loadingStatus || 'Not Loaded'}<br>
+      <strong>Date Completed:</strong> ${mark.dateCompleted || ''}<br>
+      <strong>Date to Load:</strong> ${mark.dateToLoad || ''}<br>
+      <strong>Days Waiting:</strong> ${
+        daysWaiting !== null ? daysWaiting + ' days' : '—'
+      }
+    </p>
+  `;
+
+  overlay.classList.remove('hidden');
+}
+
+
+function closeMarkDetails() {
+  document
+    .getElementById('markDetailsOverlay')
+    ?.classList.add('hidden');
+}
+
+function getDaysWaiting(mark) {
+  const baseDate = mark.dateCompleted || mark.dateToLoad;
+  if (!baseDate) return null;
+
+  const start = new Date(baseDate);
+  if (isNaN(start.getTime())) return null;
+
+  const today = new Date();
+  const diff = Math.floor(
+    (today - start) / (1000 * 60 * 60 * 24)
+  );
+
+  return diff >= 0 ? diff : null;
+}
+
+function isLateMark(mark) {
+  if (!mark.dateToLoad) return false;
+  if (mark.loadingStatus === 'Loaded') return false;
+
+  const due = new Date(mark.dateToLoad);
+  if (isNaN(due.getTime())) return false;
+
+  const today = new Date();
+  const daysPastDue = Math.floor(
+    (today - due) / (1000 * 60 * 60 * 24)
+  );
+
+  // 2-day grace → late on day 3
+  return daysPastDue >= 3;
+}
+
+function isInLoadingTable(mark) {
+  return (
+    mark.cleared === true &&
+    (mark.breakStatus === 'Completed' ||
+     mark.breakStatus === 'Completed Breaking')
+  );
+}
+
+function isInBreakTable(mark) {
+  return (
+    !mark.cleared &&
+    (mark.breakStatus === 'Completed' ||
+     mark.breakStatus === 'Completed Breaking')
+  );
+}
+
+function countZoneStats(zone) {
+  let breakCount = 0;
+  let loadingCount = 0;
+  let lateCount = 0;
+
+  marks.forEach(m => {
+    if (!m.location) return;
+    if (m.loadingStatus === 'Loaded') return;
+
+    const parsed = parseLocation(m.location);
+    if (!parsed || parsed.zone !== zone) return;
+
+    if (isInLoadingTable(m)) {
+      loadingCount++;
+    } else if (isInBreakTable(m)) {
+      breakCount++;
+    }
+
+    if (isLateMark(m)) {
+      lateCount++;
+    }
+  });
+
+  return { breakCount, loadingCount, lateCount };
+}
+
+let warehouseView = 'visual'; // 'visual' | 'compact'
+
+function setWarehouseView(view) {
+  warehouseView = view;
+
+  document.getElementById('whViewVisual')
+    ?.classList.toggle('active', view === 'visual');
+  document.getElementById('whViewCompact')
+    ?.classList.toggle('active', view === 'compact');
+
+  renderWarehouse();
+}
+function renderWarehouse() {
+  if (warehouseView === 'compact') {
+    renderWarehouseCompact();
+  } else {
+    renderWarehouseMap();
+  }
+}
+
+
+	// ====== REPORT HELPERS ======
+
+let currentReportPeriod = 'daily'; // 'daily' | 'weekly' | 'monthly'
+
+function todayMidnight() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function addDays(date, days) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+// period: 'daily' | 'weekly' | 'monthly'
+function getReportRange(period) {
+  const now = new Date();
+
+  // normalize to midnight
+  const today = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate()
+  );
+
+  if (period === 'daily') {
+    const start = today;
+    const end = new Date(today);
+    end.setDate(end.getDate() + 1);
+    return { start, end };
+  }
+
+  if (period === 'weekly') {
+    const start = new Date(today);
+    start.setDate(start.getDate() - 6);
+    const end = new Date(today);
+    end.setDate(end.getDate() + 1);
+    return { start, end };
+  }
+
+  if (period === 'monthly') {
+    const start = new Date(today.getFullYear(), today.getMonth(), 1);
+    const end = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+    return { start, end };
+  }
+
+  // ✅ July 1 fiscal year
+  const fyStartYear = today.getMonth() >= 6
+    ? today.getFullYear()
+    : today.getFullYear() - 1;
+
+  const start = new Date(fyStartYear, 6, 1);
+  const end = new Date(today);
+  end.setDate(end.getDate() + 1);
+  return { start, end };
+}
+
+
+function parseOutLocation(loc) {
+  if (!loc) return null;
+
+  const m = loc.match(/^Out\s*(\d+)$/i);
+  if (!m) return null;
+
+  const num = Number(m[1]);
+
+  if (num >= 1 && num <= 12) return { zone: 'North', index: num };
+  if (num >= 13 && num <= 24) return { zone: 'South', index: num };
+  if (num >= 25 && num <= 42) return { zone: 'West', index: num };
+
+  return null;
+}
+
+
+function parseLocation(loc) {
+  if (!loc) return null;
+  const m = loc.match(/^(\d+)([ABC])$/);
+  if (!m) return null;
+  return { row: Number(m[1]), zone: m[2] };
+}
+
+
+// "On Time" vs "Late" based on dateToLoad vs dateLoaded
+// 2-day grace. 3rd day (diff >= 3) is Late. Includes weekends/holidays.
+function getPickupStatus(mark) {
+  if (!mark.dateToLoad || !mark.dateLoaded) return 'Unknown';
+
+  const loadDate = new Date(mark.dateToLoad);
+  const actual = new Date(mark.dateLoaded);
+
+  if (isNaN(loadDate.getTime()) || isNaN(actual.getTime())) return 'Unknown';
+
+  const diffMs = actual.getTime() - loadDate.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays <= 2) return 'On Time';
+  return 'Late';
+}
+
+// split multiple names: "Sean, Bob / Mike" → ["Sean","Bob","Mike"]
+function parseNamesList(raw) {
+  if (!raw) return [];
+  return Array.from(
+    new Set(
+      String(raw)
+        .split(/[,/&]/)
+        .map(s => s.trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+function generateReportData(marksSubset) {
+  const report = {
+    totals: {
+      marks: 0,
+      bales: 0,
+      evaluatedForTimeliness: 0,
+      lateMarks: 0
+    },
+    breakers: {},
+    haulers: {},
+    loaders: {},
+    containers: {}
+  };
+
+  marksSubset.forEach(m => {
+    if (!m) return;
+
+    const bales = Number(m.baleCount) || 0;
+
+    report.totals.marks++;
+    report.totals.bales += bales;
+
+    // late logic (kept for late-marks table)
+    const status = getPickupStatus(m);
+    const isLate = status === 'Late';
+    const hasTiming = status === 'Late' || status === 'On Time';
+
+    if (hasTiming) {
+      report.totals.evaluatedForTimeliness++;
+      if (isLate) report.totals.lateMarks++;
+    }
+
+    // BREAKERS
+    parseNamesList(m.breakers).forEach(name => {
+      report.breakers[name] ||= { marks: 0, bales: 0 };
+      report.breakers[name].marks++;
+      report.breakers[name].bales += bales;
+    });
+
+    // HAULERS
+    parseNamesList(m.hauler).forEach(name => {
+      report.haulers[name] ||= { marks: 0, bales: 0 };
+      report.haulers[name].marks++;
+      report.haulers[name].bales += bales;
+    });
+
+    // LOADERS
+    parseNamesList(m.loadedBy).forEach(name => {
+      report.loaders[name] ||= { marks: 0, bales: 0 };
+      report.loaders[name].marks++;
+      report.loaders[name].bales += bales;
+    });
+
+    // CONTAINERS (late stats still apply here)
+    if (m.containerType) {
+      const type = String(m.containerType).trim();
+      report.containers[type] ||= { marks: 0, lateMarks: 0 };
+      report.containers[type].marks++;
+      if (isLate) report.containers[type].lateMarks++;
+    }
+  });
+
+  return report;
+}
+
+
+function formatPercent(numerator, denominator) {
+  if (!denominator || denominator <= 0) return '0%';
+  return ((numerator * 100) / denominator).toFixed(1) + '%';
+}
+
+function setReportPeriod(period) {
+  currentReportPeriod = period;
+  renderReports();
+}
+
+function renderPersonTable(title, dataMap, totalBales) {
+  const entries = Object.entries(dataMap);
+
+  if (!entries.length) {
+    return `
+      <div class="card" style="margin-top:8px;">
+        <h4 style="margin:0 0 4px;font-size:13px;">${title}</h4>
+        <p class="muted">No data.</p>
+      </div>
+    `;
+  }
+
+  const rows = entries
+    .sort((a, b) => b[1].bales - a[1].bales)
+    .map(([name, stats]) => `
+      <tr>
+        <td>${name}</td>
+        <td>${stats.marks}</td>
+        <td>${stats.bales}</td>
+        <td>${formatPercent(stats.bales, totalBales)}</td>
+      </tr>
+    `)
+    .join('');
+
+  return `
+    <div class="card" style="margin-top:8px;">
+      <h4 style="margin:0 0 4px;font-size:13px;">${title}</h4>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Marks</th>
+              <th>Bales</th>
+              <th>% of Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+
+
+
+// Door rows by zone (matches physical warehouse layout)
+const DOOR_ROWS = {
+  A: [8, 11, 14],
+  B: [8, 11, 14]
+};
+
+function getWarehouseClass(mark) {
+  if (isInLoadingTable(mark)) {
+    // Appears in Loading tab → green
+    return 'cal-loading';
+  }
+
+  if (isInBreakTable(mark)) {
+    // Appears in Break / Build tab → blue
+    return 'cal-break';
+  }
+
+  // Anything else (shouldn't usually show here)
+  return 'cal-default';
+}
+
+function renderSnapshot() {
+  const container = document.getElementById('snapshotContent');
+  if (!container) return;
+
+  console.log('✅ renderSnapshot called', {
+    marksExists: Array.isArray(marks),
+    marksLength: marks?.length,
+  });
+
+  let total = 0;
+  let breakCount = 0;
+  let loadingCount = 0;
+  let lateCount = 0;
+  let oldestDays = null;
+  const lateMarks = [];
+
+  marks.forEach(m => {
+    if (m.loadingStatus === 'Loaded') return;
+
+    total++;
+
+    if (isInLoadingTable(m)) loadingCount++;
+    else if (isInBreakTable(m)) breakCount++;
+
+    const days = getDaysWaiting(m);
+    if (days !== null) {
+      if (oldestDays === null || days > oldestDays) {
+        oldestDays = days;
+      }
+    }
+
+    if (isLateMark(m)) {
+      lateCount++;
+      lateMarks.push(m);
+    }
+  });
+
+  const flowPct = n =>
+    total ? Math.round((n / total) * 100) : 0;
+
+  container.innerHTML = `
+    <div class="card">
+      <div class="snapshot-kpis">
+        <div class="kpi"><strong>${total}</strong><span>Total in Yard</span></div>
+        <div class="kpi"><strong>${breakCount}</strong><span>In Break</span></div>
+        <div class="kpi"><strong>${loadingCount}</strong><span>In Loading</span></div>
+        <div class="kpi"><strong>${lateCount}</strong><span>Late</span></div>
+        <div class="kpi">
+          <strong>${oldestDays ?? '—'}</strong><span>Oldest Days Waiting</span>
+        </div>
+      </div>
+
+      <div class="snapshot-flow">
+        <div>🔵 Break: ${breakCount} (${flowPct(breakCount)}%)</div>
+        <div>🟢 Loading: ${loadingCount} (${flowPct(loadingCount)}%)</div>
+        <div>⚪ Loaded: ${marks.length - total}</div>
+      </div>
+
+      ${renderLateSnapshot(lateMarks)}
+    </div>
+  `;
+}
+
+function renderLateSnapshot(lateMarks) {
+  if (!lateMarks.length) {
+    return `
+      <div class="card">
+        <h4>Exceptions</h4>
+        <p class="muted">No late marks.</p>
+      </div>
+    `;
+  }
+
+  const rows = lateMarks
+    .sort((a, b) => getDaysWaiting(b) - getDaysWaiting(a))
+    .map(m => `
+      <tr onclick='openMarkDetails(${JSON.stringify(m)})'>
+        <td>${m.mark}</td>
+        <td>${m.location || '—'}</td>
+        <td>${m.baleCount}</td>
+        <td>${getDaysWaiting(m)} days</td>
+      </tr>
+    `)
+    .join('');
+
+  return `
+    <div class="card">
+      <h4>Late Marks</h4>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Mark</th>
+              <th>Location</th>
+              <th>Bales</th>
+              <th>Days Waiting</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+
+
+
+function renderWarehouseMap() {
+  const container = document.getElementById('warehouseMap');
+  if (!container) return;
+
+  const byLocation = {};
+
+  // ✅ Only marks physically in the warehouse
+  marks.forEach(m => {
+    if (!m.location) return;
+
+    if (
+      m.breakStatus !== 'Completed' &&
+      m.breakStatus !== 'Completed Breaking'
+    ) return;
+
+    if (m.loadingStatus === 'Loaded') return;
+
+    const parsed = parseLocation(m.location);
+    if (!parsed) return;
+
+    byLocation[`${parsed.row}${parsed.zone}`] = m;
+  });
+
+  container.innerHTML = '';
+
+  ['C', 'B', 'A'].forEach(zone => {
+    const zoneEl = document.createElement('div');
+    zoneEl.className = 'zone';
+    const stats = countZoneStats(zone);
+
+zoneEl.innerHTML = `
+  <h4>
+    Location ${zone}
+    <span style="font-size:12px; font-weight:normal;">
+      (🔵 ${stats.breakCount}
+       🟢 ${stats.loadingCount}
+       🔴 ${stats.lateCount})
+    </span>
+  </h4>
+`;
+
+
+    // Rows top → bottom
+    for (let row = 1; row <= 27; row++) {
+      const key = `${row}${zone}`;
+      const isDoor =
+        DOOR_ROWS[zone] && DOOR_ROWS[zone].includes(row);
+
+      if (isDoor) {
+        zoneEl.innerHTML += `
+          <div class="wh-row">
+            <div class="wh-label">${key}</div>
+            <div class="wh-cell wh-empty" style="text-align:center;">
+              DOOR
+            </div>
+          </div>
+        `;
+        continue;
+      }
+
+      const mark = byLocation[key];
+
+      if (mark) {
+        zoneEl.innerHTML += `
+          <div class="wh-row">
+            <div class="wh-label">${key}</div>
+            <div class="wh-cell ${getWarehouseClass(mark)}"
+                 onclick='openMarkDetails(${JSON.stringify(mark)})'>
+              <strong>
+                ${mark.mark}
+                ${isLateMark(mark) ? '<span class="late-badge">LATE</span>' : ''}
+              </strong><br>
+              ${mark.baleCount} bales
+            </div>
+          </div>
+        `;
+      } else {
+        zoneEl.innerHTML += `
+          <div class="wh-row">
+            <div class="wh-label">${key}</div>
+            <div class="wh-cell wh-empty"></div>
+          </div>
+        `;
+      }
+    }
+
+    container.appendChild(zoneEl);
+  });
+
+  renderOutsideLanes();
+}
+
+
+function renderOutsideLanes() {
+  const container = document.getElementById('warehouseMap');
+  if (!container) return;
+
+  const outsideMarks = {};
+
+  // Collect valid outside marks
+  marks.forEach(m => {
+    if (!m.location) return;
+
+    if (
+      m.breakStatus !== 'Completed' &&
+      m.breakStatus !== 'Completed Breaking'
+    ) return;
+
+    if (m.loadingStatus === 'Loaded') return;
+
+    Object.values(OUTSIDE_LANES).forEach(lane => {
+      if (m.location.startsWith(lane.prefix)) {
+        outsideMarks[m.location] = m;
+      }
+    });
+  });
+
+  const outsideWrapper = document.createElement('div');
+  outsideWrapper.style.marginTop = '16px';
+
+  Object.values(OUTSIDE_LANES).forEach(lane => {
+    const laneEl = document.createElement('div');
+    laneEl.className = 'zone';
+    laneEl.innerHTML = `<h4>${lane.label}</h4>`;
+
+    for (let i = 1; i <= lane.count; i++) {
+      const key = `${lane.prefix}${i}`;
+      const mark = outsideMarks[key];
+
+      if (mark) {
+        laneEl.innerHTML += `
+          <div class="wh-row">
+            <div class="wh-label">${key}</div>
+            <div class="wh-cell ${getCalendarClass(mark)}" onclick='openMarkDetails(${JSON.stringify(mark)})'>
+              <strong>
+  ${mark.mark}
+  ${isLateMark(mark) ? '<span class="late-badge">LATE</span>' : ''}
+</strong><br>
+${mark.baleCount} bales
+
+            </div>
+          </div>
+        `;
+      } else {
+        laneEl.innerHTML += `
+          <div class="wh-row">
+            <div class="wh-label">${key}</div>
+            <div class="wh-cell wh-empty"></div>
+          </div>
+        `;
+      }
+    }
+
+    outsideWrapper.appendChild(laneEl);
+  });
+
+  renderOutsideLanes();
+
+}
+
+function renderOutsideLanes() {
+  const container = document.getElementById('warehouseMap');
+  if (!container) return;
+
+  const outsideZones = {
+    North: { start: 1, end: 12 },
+    South: { start: 13, end: 24 },
+    West:  { start: 25, end: 42 }
+  };
+
+  const outsideMarks = {};
+
+  // collect valid outside marks
+  marks.forEach(m => {
+    if (!m.location) return;
+
+    if (
+      m.breakStatus !== 'Completed' &&
+      m.breakStatus !== 'Completed Breaking'
+    ) return;
+
+    if (m.loadingStatus === 'Loaded') return;
+
+    const parsed = parseOutLocation(m.location);
+    if (!parsed) return;
+
+    outsideMarks[`Out ${parsed.index}`] = m;
+  });
+
+  const wrapper = document.createElement('div');
+  wrapper.style.marginTop = '24px';
+  wrapper.style.display = 'grid';
+  wrapper.style.gridTemplateColumns = 'repeat(3, 1fr)';
+  wrapper.style.gap = '16px';
+
+  Object.entries(outsideZones).forEach(([zone, range]) => {
+    const zoneEl = document.createElement('div');
+    zoneEl.className = 'zone';
+    zoneEl.innerHTML = `<h4>Outside ${zone}</h4>`;
+
+    for (let i = range.start; i <= range.end; i++) {
+      const key = `Out ${i}`;
+      const mark = outsideMarks[key];
+
+      if (mark) {
+        zoneEl.innerHTML += `
+          <div class="wh-row">
+            <div class="wh-label">${key}</div>
+            <div class="wh-cell ${getCalendarClass(mark)}">
+              <strong>${mark.mark}</strong><br>
+              ${mark.baleCount} bales
+            </div>
+          </div>
+        `;
+      } else {
+        zoneEl.innerHTML += `
+          <div class="wh-row">
+            <div class="wh-label">${key}</div>
+            <div class="wh-cell wh-empty"></div>
+          </div>
+        `;
+      }
+    }
+
+    wrapper.appendChild(zoneEl);
+  });
+
+  container.appendChild(wrapper);
+}
+
+
+function renderReports() {
+  const container = document.getElementById('reportsContent');
+  if (!container) return;
+
+  if (!Array.isArray(marks) || marks.length === 0) {
+    container.innerHTML = '<p class="muted">No marks yet.</p>';
+    return;
+  }
+
+  const basisSelect = document.getElementById('reportDateBasis');
+  const basis = basisSelect ? basisSelect.value : 'loaded'; // 'loaded' | 'completed'
+
+  const { start, end } = getReportRange(currentReportPeriod);
+
+  // Filter marks by chosen date basis
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+const subset = marks.filter(m => {
+  if (basis === 'completed') return false;
+
+  if (!m.dateLoaded) return false;
+
+  // ✅ DAILY = loaded today (string-safe)
+  if (currentReportPeriod === 'daily') {
+    return m.dateLoaded === todayStr;
+  }
+
+  // ✅ Weekly / Monthly / YTD
+  const d = new Date(m.dateLoaded);
+  return d >= start && d < end;
+});
+
+
+  if (subset.length === 0) {
+    container.innerHTML = `<p class="muted">No marks found for this ${currentReportPeriod} snapshot.</p>`;
+    return;
+  }
+
+  const report = generateReportData(subset);
+  const total = report.totals.marks;
+  const evalTotal = report.totals.evaluatedForTimeliness;
+  const lateTotal = report.totals.lateMarks;
+  const onTimeTotal = evalTotal - lateTotal;
+
+  const latePct = formatPercent(lateTotal, evalTotal);
+  const onTimePct = formatPercent(onTimeTotal, evalTotal);
+
+  function renderContainerTable() {
+    const entries = Object.entries(report.containers);
+    if (!entries.length) {
+      return `
+        <div class="card" style="margin-top:8px;">
+          <h4 style="margin:0 0 4px;font-size:13px;">Container Types</h4>
+          <p class="muted">No data.</p>
+        </div>
+      `;
+    }
+    const rows = entries
+      .sort((a, b) => b[1].marks - a[1].marks)
+      .map(([type, stats]) => `
+        <tr>
+          <td>${type}</td>
+          <td>${stats.marks}</td>
+          <td>${stats.lateMarks}</td>
+          <td>${formatPercent(stats.lateMarks, stats.marks)}</td>
+        </tr>
+      `)
+      .join('');
+
+    return `
+      <div class="card" style="margin-top:8px;">
+        <h4 style="margin:0 0 4px;font-size:13px;">Container Types</h4>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Marks</th>
+                <th>Late Marks</</th>
+                <th>Late %</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }
+
+  const periodLabel =
+  currentReportPeriod === 'daily'
+    ? 'Daily Report'
+    : currentReportPeriod === 'weekly'
+    ? 'Weekly Report'
+    : currentReportPeriod === 'monthly'
+    ? 'Monthly Report'
+    : 'Year-to-Date Report';
+
+
+
+  container.innerHTML = `
+  <div class="card" style="margin-bottom:8px;">
+    <h4>
+  Report Summary — ${periodLabel} (by ${basis === 'completed' ? 'completed date' : 'loaded date'})
+</h4>
+
+    <p style="margin:0;font-size:12px;">
+      Total marks in snapshot: <strong>${report.totals.marks}</strong><br>
+      Total bales in snapshot: <strong>${report.totals.bales}</strong><br>
+      Marks evaluated for on-time vs late: <strong>${report.totals.evaluatedForTimeliness}</strong><br>
+      Late marks: <strong>${report.totals.lateMarks}</strong>
+    </p>
+  </div>
+
+  ${renderPersonTable('Breakers', report.breakers, report.totals.bales)}
+  ${renderPersonTable('Haulers', report.haulers, report.totals.bales)}
+  ${renderPersonTable('Loaders', report.loaders, report.totals.bales)}
+
+  ${renderContainerTable()}
+  ${renderLateMarksTable(subset)}
+`;
+
+}
+function renderLateMarksTable(marksSubset) {
+  const lateMarks = marksSubset
+    .map(m => {
+      if (!m.dateLoaded || !m.dateToLoad) return null;
+
+      const scheduled = new Date(m.dateToLoad);
+      const actual = new Date(m.dateLoaded);
+
+      const daysLate = Math.floor(
+        (actual - scheduled) / (1000 * 60 * 60 * 24)
+      ) - 2;
+
+      if (daysLate <= 0) return null;
+
+      return {
+        mark: m.mark,
+        orderId: m.orderId,
+        daysLate,
+        containerType: m.containerType || '',
+        loadedBy: m.loadedBy || '',
+        hauler: m.hauler || '',
+        dateToLoad: m.dateToLoad,
+        dateLoaded: m.dateLoaded
+      };
+    })
+    .filter(Boolean);
+
+  if (!lateMarks.length) {
+    return `
+      <div class="card" style="margin-top:8px;">
+        <h4 style="margin:0 0 4px;font-size:13px;">Late Marks</h4>
+        <p class="muted">No late marks in this period.</p>
+      </div>
+    `;
+  }
+
+  const rows = lateMarks
+    .sort((a, b) => b.daysLate - a.daysLate)
+    .map(l => `
+      <tr>
+        <td>${l.mark}</td>
+        <td>${l.orderId}</td>
+        <td>${l.daysLate}</td>
+        <td>${l.containerType}</td>
+        <td>${l.loadedBy}</td>
+        <td>${l.hauler}</td>
+        <td>${l.dateToLoad}</td>
+        <td>${l.dateLoaded}</td>
+      </tr>
+    `)
+    .join('');
+
+  return `
+    <div class="card" style="margin-top:8px;">
+      <h4 style="margin:0 0 4px;font-size:13px;">Late Marks</h4>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Mark</th>
+              <th>Order</th>
+              <th>Days Late</th>
+              <th>Container</th>
+              <th>Loaded By</th>
+              <th>Hauler</th>
+              <th>Date To Load</th>
+              <th>Date Loaded</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+// Simple print-to-PDF of the report content
+function exportReportsAsPDF() {
+  const contentEl = document.getElementById('reportsContent');
+  if (!contentEl) return;
+
+  const win = window.open('', '_blank');
+  win.document.write(`
+    <html>
+      <head>
+        <title>Mark Tracker Report</title>
+        <style>
+          body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 12px; padding: 16px; }
+          h3, h4 { margin: 0 0 8px; }
+          table { border-collapse: collapse; width: 100%; font-size: 11px; }
+          th, td { border: 1px solid #e5e7eb; padding: 4px 6px; }
+          th { background: #f9fafb; }
+        </style>
+      </head>
+      <body>
+        <h3>Mark Tracker Report</h3>
+        ${contentEl.innerHTML}
+      </body>
+    </html>
+  `);
+  win.document.close();
+  win.focus();
+  win.print();
+}
+
+
+    // ===== DATA MODEL =====
+    function createMarkObj({ mark, orderId, baleCount, location, dateToLoad, readyToBreak }) {
+      const now = new Date().toISOString();
+      return {
+        id: Date.now().toString() + '_' + Math.random().toString(16).slice(2),
+        mark: mark.trim().toUpperCase(),
+        orderId: orderId.trim(),
+        baleCount,
+        location: location.trim(),
+        dateToLoad: dateToLoad || '',
+        readyToBreak: !!readyToBreak,
+
+        breakStatus: readyToBreak ? 'Ready' : 'Not Started',
+        breakers: '',
+        hauler: '',
+        dateCompleted: '',
+        clearDate: '',
+        cleared: false,
+
+        loadingStatus: 'Not Loaded',
+        dateLoaded: '',
+        loadedBy: '',
+        containerType: '',
+        vehicleId: '',
+        truckline: '',
+        driverName: '',
+        driverPhone: '',
+
+        createdAt: now
+      };
+    }
+
+    function handleAddMark(e) {
+  e.preventDefault();
+
+  const markInput = document.getElementById('mark');
+  const orderIdInput = document.getElementById('orderId');
+  const baleInput = document.getElementById('baleCount');
+  const locInput = document.getElementById('location');
+  const dateToLoadInput = document.getElementById('dateToLoad');
+  const readyInput = document.getElementById('readyToBreak');
+
+  const markVal = (markInput.value || '').trim();
+  const orderVal = (orderIdInput.value || '').trim();
+  const baleVal = parseInt(baleInput.value || '0', 10);
+
+  if (!markVal || !orderVal || !baleVal) {
+    alert('Please enter MARK, ORDER ID, and BALE COUNT.');
+    return;
+  }
+
+  const newMark = createMarkObj({
+    mark: markVal,
+    orderId: orderVal,
+    baleCount: baleVal,
+    location: locInput.value || '',
+    dateToLoad: dateToLoadInput.value || '',
+    readyToBreak: readyInput.checked
+  });
+
+  marks.push(newMark);
+  saveData();
+  pushMarkToSheets(newMark);
+
+  e.target.reset();
+  markInput.focus();
+}
+
+
+    function resetAddForm() {
+      document.getElementById('addMarkForm').reset();
+    }
+
+	
+
+    function updateMarkField(id, field, value) {
+  const m = marks.find(x => x.id === id);
+  if (!m) return;
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  // ---- HARD STATE RULES ----
+
+  // ✅ Cleared marks must remain Completed
+  if (field === 'breakStatus' && m.cleared && value !== 'Completed') {
+    return;
+  }
+
+  // ✅ Completing requires a completed date
+  if (field === 'breakStatus' && value === 'Completed') {
+    m.dateCompleted ||= today;
+  }
+
+  // ✅ Loaded implies cleared + completed
+  if (field === 'loadingStatus' && value === 'Loaded') {
+    m.cleared = true;
+    m.breakStatus = 'Completed';
+    m.dateLoaded ||= today;
+    m.clearDate ||= today;
+    m.dateCompleted ||= today;
+  }
+
+  m[field] = value;
+  saveData();
+  pushMarkToSheets(m);
+}
+
+
+
+    function toggleReady(id, checked) {
+  const m = marks.find(x => x.id === id);
+  if (!m) return;
+
+  m.readyToBreak = checked;
+
+  if (m.breakStatus === "Not Started" && checked) m.breakStatus = "Ready";
+  if (!checked && m.breakStatus === "Ready") m.breakStatus = "Not Started";
+
+  saveData();
+  pushMarkToSheets(m);
+}
+
+
+    function markAsCleared(id) {
+      const m = marks.find(x => x.id === id);
+      if (!m) return;
+
+      const today = new Date().toISOString().slice(0, 10);
+
+      if (m.cleared) {
+        m.cleared = false;
+        m.clearDate = '';
+        m.loadingStatus = 'Not Loaded';
+      } else {
+        m.cleared = true;
+        if (!m.clearDate) m.clearDate = today;
+        // when you clear, it goes to loading pipeline (still Not Loaded)
+        if (!m.loadingStatus) m.loadingStatus = 'Not Loaded';
+      }
+
+      saveData();
+	  pushMarkToSheets(m);
+    }
+
+    function deleteMark(id) {
+      if (!confirm('Delete this mark?')) return;
+      marks = marks.filter(m => m.id !== id);
+      saveData();
+    }
+
+    // ===== RENDER: ALL MARKS =====
+    function renderAllMarks() {
+      const container = document.getElementById('allMarksList');
+      const q = (document.getElementById('searchAllMarks').value || '').trim().toLowerCase();
+
+      const filtered = marks
+        .slice()
+        .sort((a, b) => {
+          return (b.createdAt || '').localeCompare(a.createdAt || '');
+        })
+        .filter(m => {
+          if (!q) return true;
+          const text = [
+            m.mark,
+            m.orderId,
+            m.location || '',
+            m.breakStatus || '',
+            m.loadingStatus || ''
+          ].join(' ').toLowerCase();
+          return text.includes(q);
+        });
+
+      if (!filtered.length) {
+        container.innerHTML =
+          '<div class="muted" style="padding:8px;">No marks yet.</div>';
+        return;
+      }
+
+      container.innerHTML = filtered
+        .map(m => {
+          const breakBadge = m.breakStatus || 'Not Started';
+          const loadingBadge = m.loadingStatus || 'Not Loaded';
+          const ready = m.readyToBreak ? 'Yes' : 'No';
+
+          return `
+          <div class="card">
+            <div class="card-header-row">
+              <div>
+                <div><strong>${m.mark}</strong> · Order ${m.orderId}</div>
+                <div class="muted" style="font-size:12px;">
+                  Bales: ${m.baleCount} · Location: ${m.location || 'N/A'}
+                </div>
+              </div>
+              <div class="badge-row">
+                <span class="badge">${breakBadge}</span>
+                <span class="badge">${loadingBadge}</span>
+              </div>
+            </div>
+            <div class="card-row">
+              <span>Ready to Break: <strong>${ready}</strong></span>
+              <span>Date to Load: <strong>${m.dateToLoad || 'N/A'}</strong></span>
+            </div>
+          </div>
+        `;
+        })
+        .join('');
+    }
+
+    // ===== RENDER: BREAK TABLE =====
+    function renderBreakTable() {
+    
+
+      const tbody = document.getElementById('breakTableBody');
+      const q = (document.getElementById('searchBreak').value || '').trim().toLowerCase();
+      const rows = [];
+
+      // Hide marks that are cleared AND completed/completed breaking
+      const filtered = marks
+        .filter(m => !(
+          m.cleared &&
+          (m.breakStatus === 'Completed' || m.breakStatus === 'Completed Breaking')
+        ))
+        .filter(m => {
+          if (!q) return true;
+          return (
+            (m.mark || '').toLowerCase().includes(q) ||
+            (m.orderId || '').toLowerCase().includes(q) ||
+            (m.location || '').toLowerCase().includes(q)
+          );
+        });
+
+      const statusOrder = ['Ready', 'In Progress', 'Not Started', 'Completed', 'Completed Breaking'];
+
+      statusOrder.forEach(status => {
+        const group = filtered
+          .filter(m => m.breakStatus === status)
+          .slice()
+          .sort((a, b) => {
+            const aDate = a.dateToLoad || '9999-12-31';
+            const bDate = b.dateToLoad || '9999-12-31';
+            if (aDate === bDate) {
+              return (a.mark || '').localeCompare(b.mark || '');
+            }
+            return aDate.localeCompare(bDate);
+          });
+
+        if (group.length === 0) return;
+
+        // group header row
+        rows.push(`
+          <tr>
+            <td colspan="12" style="font-weight:600; font-size:11px; background:#f3f4f6;">
+              ${status} (${group.length})
+            </td>
+          </tr>
+        `);
+
+        group.forEach(m => {
+          const trClass =
+            m.breakStatus === 'Completed' || m.breakStatus === 'Completed Breaking'
+              ? 'completed'
+              : (m.breakStatus === 'In Progress' ? 'in-progress' : '');
+
+          rows.push(`
+            <tr class="${trClass}">
+              <td>${m.mark}</td>
+              <td>${m.orderId}</td>
+              <td>${m.baleCount}</td>
+              <td>
+  <input type="text" value="${m.location || ''}" 
+         onblur="updateMarkLocation('${m.id}', this.value)">
+</td>
+
+              <td>
+                <input type="checkbox" ${m.readyToBreak ? 'checked' : ''} 
+                  onchange="toggleReady('${m.id}', this.checked)">
+              </td>
+
+              <td>
+                <select onchange="updateMarkField('${m.id}', 'breakStatus', this.value)">
+                  <option value="Not Started" ${m.breakStatus === 'Not Started' ? 'selected' : ''}>Not Started</option>
+                  <option value="Ready" ${m.breakStatus === 'Ready' ? 'selected' : ''}>Ready</option>
+                  <option value="In Progress" ${m.breakStatus === 'In Progress' ? 'selected' : ''}>In Progress</option>
+                  <option value="Completed" ${m.breakStatus === 'Completed' ? 'selected' : ''}>Completed</option>
+                  <option value="Completed Breaking" ${m.breakStatus === 'Completed Breaking' ? 'selected' : ''}>Completed Breaking</option>
+                </select>
+              </td>
+
+             <td>
+  <input 
+    type="text" 
+    value="${m.breakers || ''}" 
+    onblur="updateMarkField('${m.id}', 'breakers', this.value)"
+  >
+</td>
+
+<td>
+  <input 
+    type="text" 
+    value="${m.hauler || ''}" 
+    onblur="updateMarkField('${m.id}', 'hauler', this.value)"
+  >
+</td>
+
+		<td>
+  <input
+    type="date"
+    value="${m.dateCompleted || ''}"
+    onblur="updateMarkField('${m.id}', 'dateCompleted', this.value)">
+</td>
+
+<td>
+  <input
+    type="date"
+    value="${m.dateToLoad || ''}"
+    onblur="updateMarkField('${m.id}', 'dateToLoad', this.value)">
+</td>
+
+<td>
+  <input
+    type="date"
+    value="${m.clearDate || ''}"
+    onblur="updateMarkField('${m.id}', 'clearDate', this.value)">
+</td>
+
+<td>
+  <button class="btn-sm btn-outline" onclick="markAsCleared('${m.id}')">
+    ${m.cleared ? 'Unclear' : 'Clear'}
+  </button>
+</td>
+
+            </tr>
+          `);
+        });
+      });
+
+      tbody.innerHTML =
+        rows.join('') || '<tr><td colspan="12" class="muted">No marks yet.</td></tr>';
+		
+		updateBadges();
+
+		
+    }
+
+function updateMarkLocation(id, newLocation) {
+  const mark = marks.find(m => m.id === id);
+  if (!mark) return;
+
+  mark.location = newLocation || '';
+
+  // Save locally
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(marks));
+
+  // Push single update to Google Sheets
+  pushMarkToSheets(mark);
+
+  // Refresh UI sections
+  renderBreakTable();
+  renderWarehouseMap();
+  renderCalendar();
+}
+
+
+
+
+    // ===== RENDER: LOADING TABLE =====
+    function renderLoadingTable() {
+      const tbody = document.getElementById('loadingTableBody');
+      const q = (document.getElementById('searchLoading').value || '').trim().toLowerCase();
+      const rows = [];
+
+      const filtered = marks
+        .filter(m =>
+          m.cleared &&
+          (m.breakStatus === 'Completed' || m.breakStatus === 'Completed Breaking')
+        )
+        .filter(m => {
+          if (!q) return true;
+          return (
+            (m.mark || '').toLowerCase().includes(q) ||
+            (m.orderId || '').toLowerCase().includes(q) ||
+            (m.location || '').toLowerCase().includes(q)
+          );
+        });
+
+      const statusOrder = ['Not Loaded', 'Waiting', 'In Progress', 'Loaded'];
+
+      statusOrder.forEach(status => {
+        const group = filtered
+          .filter(m => (m.loadingStatus || 'Not Loaded') === status)
+          .slice()
+          .sort((a, b) => {
+            const aDate = a.dateToLoad || '9999-12-31';
+            const bDate = b.dateToLoad || '9999-12-31';
+            if (aDate === bDate) {
+              return (a.mark || '').localeCompare(b.mark || '');
+            }
+            return aDate.localeCompare(bDate);
+          });
+
+        if (!group.length) return;
+
+        rows.push(`
+          <tr>
+            <td colspan="14" style="font-weight:600; font-size:11px; background:#f3f4f6;">
+              ${status} (${group.length})
+            </td>
+          </tr>
+        `);
+
+        group.forEach(m => {
+          const trClass =
+            m.loadingStatus === 'Loaded'
+              ? 'completed'
+              : m.loadingStatus === 'In Progress'
+              ? 'in-progress'
+              : '';
+
+          rows.push(`
+            <tr class="${trClass}">
+              <td>${m.mark}</td>
+<td>${m.orderId}</td>
+<td>${m.baleCount}</td>
+<td>${m.location || ''}</td>
+
+<td>
+  <input
+    type="date"
+    value="${m.dateToLoad || ''}"
+    onblur="updateMarkField('${m.id}', 'dateToLoad', this.value)">
+</td>
+
+<td>
+  <input
+    type="date"
+    value="${m.clearDate || ''}"
+    onblur="updateMarkField('${m.id}', 'clearDate', this.value)">
+</td>
+
+<td>
+  <input
+    type="date"
+    value="${m.dateLoaded || ''}"
+    onblur="updateMarkField('${m.id}', 'dateLoaded', this.value)">
+</td>
+
+
+<td>
+  <select onchange="updateMarkField('${m.id}', 'loadingStatus', this.value)">
+    <option value="Not Loaded" ${m.loadingStatus === "Not Loaded" ? 'selected' : ''}>Not Loaded</option>
+    <option value="Waiting" ${m.loadingStatus === "Waiting" ? 'selected' : ''}>Waiting</option>
+    <option value="In Progress" ${m.loadingStatus === "In Progress" ? 'selected' : ''}>In Progress</option>
+    <option value="Loaded" ${m.loadingStatus === "Loaded" ? 'selected' : ''}>Loaded</option>
+  </select>
+</td>
+
+<td><input type="text" value="${m.loadedBy || ''}" onblur="updateMarkField('${m.id}', 'loadedBy', this.value)"></td>
+<td><input type="text" value="${m.containerType || ''}" onblur="updateMarkField('${m.id}', 'containerType', this.value)"></td>
+<td><input type="text" value="${m.vehicleId || ''}" onblur="updateMarkField('${m.id}', 'vehicleId', this.value)"></td>
+<td><input type="text" value="${m.truckline || ''}" onblur="updateMarkField('${m.id}', 'truckline', this.value)"></td>
+<td><input type="text" value="${m.driverName || ''}" onblur="updateMarkField('${m.id}', 'driverName', this.value)"></td>
+<td><input type="text" value="${m.driverPhone || ''}" onblur="updateMarkField('${m.id}', 'driverPhone', this.value)"></td>
+
+            </tr>
+          `);
+        });
+      });
+
+      tbody.innerHTML =
+        rows.join('') ||
+        '<tr><td colspan="14" class="muted">No cleared marks yet.</td></tr>';
+		
+		updateBadges();
+
+    }
+
+    // ===== RENDER: COMPLETED TABLE =====
+    function renderCompletedTable() {
+      const tbody = document.getElementById('completedTableBody');
+      const q = (document.getElementById('searchCompleted').value || '').trim().toLowerCase();
+      const rows = [];
+
+      const filtered = marks
+        .filter(m => (m.loadingStatus || '') === 'Loaded')
+        .slice()
+        .sort((a, b) => (a.mark || '').localeCompare(b.mark || ''))
+        .filter(m => {
+          if (!q) return true;
+          return (
+            (m.mark || '').toLowerCase().includes(q) ||
+            (m.orderId || '').toLowerCase().includes(q) ||
+            (m.location || '').toLowerCase().includes(q)
+          );
+        });
+
+      filtered.forEach(m => {
+        rows.push(`
+          <tr class="completed">
+            <td>${m.mark}</td>
+            <td>${m.orderId}</td>
+            <td>${m.baleCount}</td>
+            <td>${m.location || ''}</td>
+            <td>${m.dateCompleted || ''}</td>
+            <td>${m.clearDate || ''}</td>
+            <td>${m.dateLoaded || ''}</td>
+            <td>${m.loadedBy || ''}</td>
+            <td>${m.containerType || ''}</td>
+            <td>${m.vehicleId || ''}</td>
+            <td>${m.truckline || ''}</td>
+            <td>${m.driverName || ''}</td>
+            <td>${m.driverPhone || ''}</td>
+          </tr>
+        `);
+      });
+
+      tbody.innerHTML =
+        rows.join('') ||
+        '<tr><td colspan="13" class="muted">No completed loads yet.</td></tr>';
+    }
+
+    
+
+
+    // ===== BADGES =====
+    function updateBadges() {
+  // Break / Build: same filter as renderBreakTable
+  const breakCount = marks.filter(m =>
+    !(
+      m.cleared &&
+      (m.breakStatus === 'Completed' || m.breakStatus === 'Completed Breaking')
+    )
+  ).length;
+
+  // Loading: same base filter as renderLoadingTable, but all statuses except Loaded
+  const loadingCount = marks.filter(m =>
+    m.cleared &&
+    (m.breakStatus === 'Completed' || m.breakStatus === 'Completed Breaking') &&
+    (m.loadingStatus || 'Not Loaded') !== 'Loaded'
+  ).length;
+
+  // Completed: same filter as renderCompletedTable
+  const completedCount = marks.filter(m =>
+    (m.loadingStatus || '') === 'Loaded'
+  ).length;
+
+  // Top badges
+  document.getElementById('badge-break').textContent = breakCount;
+  document.getElementById('badge-loading').textContent = loadingCount;
+  document.getElementById('badge-completed').textContent = completedCount;
+
+  // Tab badges
+  document.getElementById('tabBadgeBreak').textContent = breakCount;
+  document.getElementById('tabBadgeLoading').textContent = loadingCount;
+  document.getElementById('tabBadgeCompleted').textContent = completedCount;
+}
+
+
+
+    // ===== CALENDAR =====
+    function initCalendarState() {
+      const today = new Date();
+      currentCalendarYear = today.getFullYear();
+      currentCalendarMonth = today.getMonth();
+      renderCalendar();
+    }
+	
+	function openCalendarModal(dateStr) {
+  const modal = document.getElementById("calendarEditModal");
+  const title = document.getElementById("modalDateTitle");
+  const list = document.getElementById("modalMarksList");
+
+  title.textContent = "Marks for " + dateStr;
+
+  const todaysMarks = marks.filter(m => m.dateToLoad === dateStr);
+
+  list.innerHTML = todaysMarks.map(m => `
+    <div class="card" style="margin-bottom:8px;">
+      <strong>${m.mark}</strong> (${m.orderId})<br>
+
+      <label>Date to Load:</label>
+      <input type="date" value="${m.dateToLoad || ''}"
+        onblur="updateMarkField('${m.id}', 'dateToLoad', this.value)"><br>
+
+      <label>Status:</label>
+      <select onchange="updateMarkField('${m.id}', 'breakStatus', this.value)">
+        <option ${m.breakStatus==='Not Started'?'selected':''}>Not Started</option>
+        <option ${m.breakStatus==='Ready'?'selected':''}>Ready</option>
+        <option ${m.breakStatus==='In Progress'?'selected':''}>In Progress</option>
+        <option ${m.breakStatus==='Completed'?'selected':''}>Completed</option>
+        <option ${m.breakStatus==='Completed Breaking'?'selected':''}>Completed Breaking</option>
+      </select>
+    </div>
+  `).join("");
+
+  modal.classList.remove("hidden");
+}
+
+function closeCalendarModal() {
+  document.getElementById("calendarEditModal").classList.add("hidden");
+}
+
+	
+	function getCalendarDotClass(m) {
+  if (m.loadingStatus === 'Loaded') return 'dot-loaded';
+  if (m.cleared && (m.breakStatus === 'Completed' || m.breakStatus === 'Completed Breaking'))
+    return 'dot-cleared';
+
+  switch (m.breakStatus) {
+    case 'Not Started': return 'dot-notstarted';
+    case 'Ready': return 'dot-ready';
+    case 'In Progress': return 'dot-inprogress';
+    case 'Completed':
+    case 'Completed Breaking': return 'dot-completed';
+  }
+  return 'dot-notstarted';
+}
+
+function getCalendarTooltip(m) {
+  if (m.loadingStatus === 'Loaded') return 'Loaded';
+  if (m.cleared && (m.breakStatus === 'Completed' || m.breakStatus === 'Completed Breaking'))
+    return 'Cleared (Waiting to Load)';
+
+  switch (m.breakStatus) {
+    case 'Not Started': return 'Not Started';
+    case 'Ready': return 'Ready';
+    case 'In Progress': return 'Breaking In Progress';
+    case 'Completed':
+    case 'Completed Breaking': return 'Completed Breaking';
+  }
+  return 'Not Started';
+}
+
+	
+
+   function renderCalendar() {
+  const monthYearEl = document.getElementById('calendarMonthYear');
+  const grid = document.getElementById('calendarGrid');
+  if (!monthYearEl || !grid) return;
+
+  monthYearEl.textContent =
+    monthNames[currentCalendarMonth] + ' ' + currentCalendarYear;
+
+  let html = '';
+
+  dayNamesShort.forEach(d => {
+    html += `<div class="calendar-day-header">${d}</div>`;
+  });
+
+  const firstOfMonth = new Date(currentCalendarYear, currentCalendarMonth, 1);
+  const startDay = firstOfMonth.getDay();
+  const daysInMonth = new Date(
+    currentCalendarYear,
+    currentCalendarMonth + 1,
+    0
+  ).getDate();
+
+  function fmtDate(y, m, d) {
+    const mm = (m + 1).toString().padStart(2, '0');
+    const dd = d.toString().padStart(2, '0');
+    return `${y}-${mm}-${dd}`;
+  }
+
+  for (let i = 0; i < startDay; i++) {
+    html += `<div class="calendar-cell"></div>`;
+  }
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateStr = fmtDate(currentCalendarYear, currentCalendarMonth, day);
+    const todaysMarks = marks.filter(m => (m.dateToLoad || '') === dateStr);
+
+    let marksHtml = '';
+
+    todaysMarks.forEach(m => {
+      const dotClass = getCalendarDotClass(m);
+      const tip = getCalendarTooltip(m);
+
+      marksHtml += `
+        <div class="calendar-mark">
+          <div>
+            <span class="calendar-dot ${dotClass}" title="${tip}"></span>
+            <strong>${m.mark}</strong> · ${m.orderId}
+          </div>
+          <div class="muted" style="font-size:11px;">
+            Bales: ${m.baleCount} · ${m.location || ''}
+          </div>
+        </div>
+      `;
+    });
+
+    const isToday = dateStr === todayStr;
+
+    html += `
+      <div class="calendar-cell ${isToday ? 'today' : ''}"
+           onclick="openCalendarModal('${dateStr}')">
+        <div class="calendar-day-number">${day}</div>
+        <div class="calendar-marks">${marksHtml}</div>
+      </div>
+    `;
+  }
+
+  grid.innerHTML = html;
+}
+
+
+
+    function prevMonth() {
+      currentCalendarMonth--;
+      if (currentCalendarMonth < 0) {
+        currentCalendarMonth = 11;
+        currentCalendarYear--;
+      }
+      renderCalendar();
+    }
+
+    function nextMonth() {
+      currentCalendarMonth++;
+      if (currentCalendarMonth > 11) {
+        currentCalendarMonth = 0;
+        currentCalendarYear++;
+      }
+      renderCalendar();
+    }
+
+    // ===== TABS & RENDER ALL =====
+    function initTabs() {
+      tabButtons = document.querySelectorAll('.tab-btn');
+      tabSections = document.querySelectorAll('.section');
+
+      tabButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const target = btn.getAttribute('data-tab');
+          switchTab(target);
+        });
+      });
+    }
+
+    function switchTab(id) {
+  tabButtons.forEach(b =>
+    b.classList.toggle('active', b.getAttribute('data-tab') === id)
+  );
+  tabSections.forEach(s =>
+    s.classList.toggle('active', s.id === id)
+  );
+
+  // ✅ Ops Snapshot hook
+  if (id === 'snapshotSection') {
+    renderSnapshot();
+  }
+}
+
+
+	function renderWarehouseCompact() {
+  const container = document.getElementById('warehouseMap');
+  if (!container) return;
+
+  const rows = [];
+
+  marks.forEach(m => {
+    if (!m.location) return;
+    if (m.loadingStatus === 'Loaded') return;
+    if (!isInBreakTable(m) && !isInLoadingTable(m)) return;
+
+    rows.push(m);
+  });
+
+  if (!rows.length) {
+    container.innerHTML = `<p class="muted">No marks in warehouse.</p>`;
+    return;
+  }
+
+  const body = rows
+    .sort((a, b) => {
+      const la = parseLocation(a.location);
+      const lb = parseLocation(b.location);
+      if (!la || !lb) return 0;
+      return la.zone.localeCompare(lb.zone) || la.row - lb.row;
+    })
+    .map(m => `
+      <tr class="${getWarehouseClass(m)}">
+        <td>${m.location}</td>
+        <td>
+          ${m.mark}
+          ${isLateMark(m) ? '<span class="late-badge">LATE</span>' : ''}
+        </td>
+        <td>${m.baleCount}</td>
+        <td>${getDaysWaiting(m) ?? '—'}</td>
+      </tr>
+    `)
+    .join('');
+
+  container.innerHTML = `
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Loc</th>
+            <th>Mark</th>
+            <th>Bales</th>
+            <th>Days</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${body}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  // Click row → open modal
+  container.querySelectorAll('tbody tr').forEach((tr, i) => {
+    tr.onclick = () => openMarkDetails(rows[i]);
+  });
+}
+
+
+    function renderAll() {
+      renderAllMarks();
+      renderBreakTable();
+      renderLoadingTable();
+      renderCompletedTable();
+      updateBadges();
+      renderCalendar();
+	  renderReports();
+	  renderWarehouse();
+	  renderSnapshot();
+
+    }
+
+	async function manualSync() {
+  await deltaSync();
+}
+
+
+    // ===== STARTUP =====
+    document.addEventListener('DOMContentLoaded', async () => {
+      initTabs();
+      initCalendarState();
+      await loadMarksFromSheets();
+      setInterval(() => {
+  if (!isUserEditing) {
+    deltaSync();
+  }
+}, 60000); // refresh every 60 seconds
+
+    });
+</script>
+
+<div id="calendarEditModal" class="modal hidden">
+  <div class="modal-content">
+    <h2 id="modalDateTitle"></h2>
+    <div id="modalMarksList"></div>
+
+    <button onclick="closeCalendarModal()" class="btn-outline">Close</button>
+  </div>
+</div>
+
+<div id="markDetailsOverlay" class="overlay hidden">
+  <div class="mark-details-card">
+    <button class="close-btn" onclick="closeMarkDetails()">✕</button>
+    <div id="markDetailsContent"></div>
+  </div>
+</div>
+
+
+</body>
+</html>
