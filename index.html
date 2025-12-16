@@ -1702,8 +1702,8 @@ const DOOR_ROWS = {
 
 function getWarehouseClass(mark) {
   if (isInLoadingTable(mark)) {
-    // Appears in Loading tab → Purple
-    return 'cal-completed';
+    // Appears in Loading tab → green
+    return 'cal-loading';
   }
 
   if (isInBreakTable(mark)) {
@@ -1769,8 +1769,8 @@ function renderSnapshot() {
 
       <div class="snapshot-flow">
         <div>🔵 Break: ${breakCount} (${flowPct(breakCount)}%)</div>
-        <div>🟢 Loading: ${loadingCount} (${flowPct(loadingCount)}%)</div>
-        <div>⚪ Loaded: ${marks.length - total}</div>
+        <div>🟣 Loading: ${loadingCount} (${flowPct(loadingCount)}%)</div>
+        <div>⚫ Loaded: ${marks.length - total}</div>
       </div>
 
       ${renderLateSnapshot(lateMarks)}
