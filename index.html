@@ -17,6 +17,39 @@
   <title>Mark Tracker - Warehouse Live</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
+/* ===== TV WALLBOARD ===== */
+.wallboard { padding: 10px; }
+.wb-top { display:flex; justify-content:space-between; align-items:flex-end; gap: 12px; }
+.wb-h1 { font-size: 26px; font-weight: 800; }
+.wb-sub { font-size: 14px; opacity: .8; }
+
+.wb-kpis { display:flex; gap: 10px; }
+.wb-kpi { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:10px 14px; min-width:120px; text-align:center; }
+.wb-kpi .n { font-size: 26px; font-weight: 800; line-height: 1; }
+.wb-kpi .l { font-size: 12px; opacity: .75; margin-top: 6px; }
+
+.wb-grid { display:grid; grid-template-columns: 1.15fr 1fr; grid-auto-rows: minmax(240px, auto); gap: 10px; margin-top: 10px; }
+.wb-card { background:#fff; border:1px solid #e5e7eb; border-radius:16px; padding:10px; overflow:hidden; }
+.wb-card-h { font-weight: 700; font-size: 14px; margin-bottom: 8px; }
+
+/* Make calendar & warehouse map denser for TV */
+#w bCalendarMount .calendar-grid, #wbCalendarMount .calendar-grid { transform: scale(1.05); transform-origin: top left; }
+#wbWarehouseMount .warehouse-map { max-height: 520px; overflow: hidden; }
+#wbSnapshotMount .snapshot-kpis .kpi strong { font-size: 22px; }
+
+/* Hide all inputs/buttons in display mode */
+.display-mode input,
+.display-mode select,
+.display-mode textarea,
+.display-mode button,
+.display-mode .btn,
+.display-mode .btn-sm,
+.display-mode .btn-outline {
+  display: none !important;
+}
+
+	  
+	  
     :root {
       --bg: #f3f4f6;
       --card-bg: #ffffff;
@@ -771,6 +804,8 @@
   <button class="tab-btn active" data-tab="calendarSection">Calendar</button>
     <button class="tab-btn" data-tab="reportsSection">Reports</button>
 	<button class="tab-btn" data-tab="snapshotSection">Ops Snapshot</button>
+	<button class="tab-btn" data-tab="wallboardSection">Wallboard</button>
+
 
 </div>
 
@@ -1036,12 +1071,60 @@
   <div id="snapshotContent"></div>
 </div>
 
+	<!-- ========== Wallboard SECTION ========== -->
+	<div id="wallboardSection" class="section">
+  <div class="wallboard">
+    <div class="wb-top">
+      <div class="wb-title">
+        <div class="wb-h1">Break and Loading</div>
+        <div class="wb-sub">
+          Last update: <span id="wbLastUpdated">—</span>
+        </div>
+      </div>
+
+      <div class="wb-kpis">
+        <div class="wb-kpi"><div class="n" id="wbBreak">0</div><div class="l">Break</div></div>
+        <div class="wb-kpi"><div class="n" id="wbLoading">0</div><div class="l">Loading</div></div>
+        <div class="wb-kpi"><div class="n" id="wbLate">0</div><div class="l">Late</div></div>
+        <div class="wb-kpi"><div class="n" id="wbTotal">0</div><div class="l">In Yard</div></div>
+      </div>
+    </div>
+
+    <div class="wb-grid">
+      <div class="wb-card">
+        <div class="wb-card-h">Calendar</div>
+        <div id="wbCalendarMount"></div>
+      </div>
+
+      <div class="wb-card">
+        <div class="wb-card-h">Warehouse Map</div>
+        <div id="wbWarehouseMount"></div>
+      </div>
+
+      <div class="wb-card">
+        <div class="wb-card-h">Ops Snapshot</div>
+        <div id="wbSnapshotMount"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
       </div>
     </div>
   </div>
 
   <script>
-    // ===== GLOBALS & CONFIG =====
+    const DISPLAY_MODE =
+  location.search.includes('display=1') ||
+  location.pathname.toLowerCase().includes('display');
+
+function isDisplayMode() {
+  return DISPLAY_MODE;
+}
+
+	  
+	  // ===== GLOBALS & CONFIG =====
     let isUserEditing = false;
 	let marks = [];
     let lastSync = 0;
@@ -1161,6 +1244,24 @@ document.addEventListener("focusout", () => {
 
       return Object.values(map);
     }
+	  document.addEventListener('DOMContentLoaded', () => {
+  initTabs();
+
+  if (isDisplayMode()) {
+    enableDisplayMode();
+  }
+});
+
+	  function switchTab(id) {
+  tabButtons.forEach(b =>
+    b.classList.toggle('active', b.getAttribute('data-tab') === id)
+  );
+  tabSections.forEach(s => s.classList.toggle('active', s.id === id));
+
+  if (id === 'snapshotSection') renderSnapshot();
+  if (id === 'wallboardSection') renderWallboard();
+}
+
 
     // ===== LOCAL STORAGE =====
     function loadData() {
@@ -1569,7 +1670,74 @@ function parseNamesList(raw) {
     )
   );
 }
+function renderWallboard() {
+  // Mount calendar
+  const calMount = document.getElementById('wbCalendarMount');
+  if (calMount) {
+    // re-use existing calendar HTML by cloning
+    const originalGrid = document.getElementById('calendarSection');
+    if (originalGrid) calMount.innerHTML = originalGrid.innerHTML;
+    // re-run calendar render so the grid is fresh
+    renderCalendar();
+  }
 
+  // Mount warehouse map
+  const whMount = document.getElementById('wbWarehouseMount');
+  if (whMount) {
+    const originalWh = document.getElementById('warehouseMap');
+    // Ensure warehouse map exists
+    renderWarehouseMap();
+    if (originalWh) whMount.innerHTML = originalWh.outerHTML;
+  }
+
+  // Mount snapshot
+  const snapMount = document.getElementById('wbSnapshotMount');
+  if (snapMount) {
+    renderSnapshot();
+    const originalSnap = document.getElementById('snapshotContent');
+    if (originalSnap) snapMount.innerHTML = originalSnap.innerHTML;
+  }
+
+  // KPIs (use your snapshot logic results)
+  let total = 0, breakCount = 0, loadingCount = 0, lateCount = 0;
+  marks.forEach(m => {
+    if (m.loadingStatus === 'Loaded') return;
+    total++;
+    if (typeof isInLoadingTable === 'function' && isInLoadingTable(m)) loadingCount++;
+    else if (typeof isInBreakTable === 'function' && isInBreakTable(m)) breakCount++;
+    if (typeof isLateMark === 'function' && isLateMark(m)) lateCount++;
+  });
+
+  const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = String(val); };
+  setText('wbTotal', total);
+  setText('wbBreak', breakCount);
+  setText('wbLoading', loadingCount);
+  setText('wbLate', lateCount);
+
+  const ts = new Date().toLocaleString();
+  setText('wbLastUpdated', ts);
+}
+function enableDisplayMode() {
+  document.body.classList.add('display-mode');
+
+  // Start on wallboard (or calendar if you prefer)
+  switchTab('wallboardSection');
+
+  // Auto-refresh data every 30s (adjust)
+  setInterval(() => {
+    loadMarksFromSheets();
+  }, 30000);
+
+  // Auto-rotate: Wallboard -> Calendar -> Warehouse -> Reports -> back
+  const rotation = ['wallboardSection', 'calendarSection', 'warehouseSection', 'reportsSection'];
+  let idx = 0;
+  setInterval(() => {
+    idx = (idx + 1) % rotation.length;
+    switchTab(rotation[idx]);
+  }, 20000); // 20 seconds per view
+}
+
+	  
 function generateReportData(marksSubset) {
   const report = {
     totals: {
@@ -3156,6 +3324,7 @@ function getCalendarTooltip(m) {
 
 </body>
 </html>
+
 
 
 
