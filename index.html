@@ -729,7 +729,7 @@
 }
 
 /* Color mapping */
-.cal-break { background: #0066ff; }      /* Blue */
+.cal-break { background: #dbeafe; }      /* Light Blue */
 .cal-loading { background: #00cc66; }    /* Green */
 .cal-completed { background: #9900cc; }  /* Purple */
 .cal-cleared { background: #ff9900; }    /* Orange */
@@ -1849,7 +1849,7 @@ function renderWarehouseMap() {
 
   container.innerHTML = '';
 
-  ['C', 'B', 'A'].forEach(zone => {
+  ['A', 'B', 'C'].forEach(zone => {
     const zoneEl = document.createElement('div');
     zoneEl.className = 'zone';
     const stats = countZoneStats(zone);
@@ -3156,6 +3156,7 @@ function getCalendarTooltip(m) {
 
 </body>
 </html>
+
 
 
 
