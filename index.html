@@ -151,25 +151,38 @@
       table-layout: auto !important;
     }
 
-    /* Force last column (Actions) to always be visible */
-    #breakSection td:last-child,
-    #breakSection th:last-child {
-      width: 90px !important;
-      min-width: 90px !important;
-      max-width: 120px !important;
-      display: table-cell !important;
-      visibility: visible !important;
-      overflow: visible !important;
-      white-space: nowrap !important;
-    }
+    /* =========================
+   BREAK TABLE – ACTIONS (STACKED)
+   ========================= */
 
-    /* Improve button sizing in Actions column */
-    #breakSection td:last-child button {
-      padding: 4px 10px !important;
-      font-size: 12px !important;
-      border-radius: 6px !important;
-    }
+/* Lock actions column narrow */
+#breakSection td:last-child,
+#breakSection th:last-child {
+  width: 64px !important;
+  min-width: 64px !important;
+  max-width: 70px !important;
+  white-space: normal !important;
+  text-align: center;
+}
 
+/* Stack buttons vertically */
+#breakSection td:last-child {
+  display: flex !important;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+
+/* Compact buttons */
+#breakSection td:last-child button {
+  padding: 2px 4px !important;
+  font-size: 11px !important;
+  line-height: 1.1 !important;
+  border-radius: 6px !important;
+  width: 100%;
+}
+
+	
 .snapshot-kpis {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
@@ -414,6 +427,12 @@
       white-space: nowrap;
     }
 
+	/* Loading row highlight when Loaded */
+	tr.row-loaded { background: #ecfdf5 !important; }
+
+	}
+
+
     tr.completed {
       background: #ecfdf5;
     }
@@ -573,6 +592,19 @@
 .wh-empty {
   background:#f3f4f6;
   color:#9ca3af;
+}
+
+/* Calendar late badge */
+.late-badge {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 999px;
+  background: #dc2626; /* red */
+  color: #fff;
+  vertical-align: middle;
 }
 
 
@@ -736,8 +768,110 @@
 .cal-loaded { background: #000000; }     /* Black */
 
 
-	
-  </style>
+	/* DARKEN THE BACKGROUND */
+.drawer-overlay {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+/* SOLID PANEL */
+.drawer {
+  background: #ffffff;
+  box-shadow: -12px 0 30px rgba(0, 0, 0, 0.35);
+}
+
+/* Make the header stand out */
+.drawer-header {
+  background: #f8fafc;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+/* Footer separation */
+.drawer-footer {
+  background: #f8fafc;
+  border-top: 1px solid #e5e7eb;
+}
+
+  
+/* ==========================
+   Break Drawer (Edit Panel)
+   ========================== */
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  display: flex;
+  justify-content: flex-end;
+  align-items: stretch;
+  z-index: 2000;
+}
+.drawer-overlay.hidden { display:none; }
+
+.drawer-panel {
+  width: 420px;
+  max-width: 92vw;
+  height: 100%;
+  background: #fff;
+  border-left: 1px solid var(--border);
+  box-shadow: -8px 0 20px rgba(0,0,0,0.12);
+  display: flex;
+  flex-direction: column;
+}
+
+.drawer-header {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.drawer-title {
+  font-weight: 700;
+  font-size: 14px;
+}
+.drawer-body {
+  padding: 12px;
+  overflow: auto;
+}
+.drawer-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.drawer-field label {
+  display:block;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.drawer-field input,
+.drawer-field select,
+.drawer-field textarea{
+  width: 100%;
+  font-size: 14px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.drawer-field textarea { min-height: 70px; resize: vertical; }
+.drawer-footer {
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  display:flex;
+  justify-content:flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 700px) {
+  .drawer-panel { width: 100vw; max-width: 100vw; }
+  .drawer-grid { grid-template-columns: 1fr; }
+}
+
+  
+@media print {
+  .drawer-overlay, .drawer-panel { display: none !important; }
+}
+</style>
 </head>
 <body>
   <div class="app-shell">
@@ -855,11 +989,6 @@
                 <th>Location</th>
                 <th>Ready?</th>
                 <th>Status</th>
-                <th>Breakers</th>
-                <th>Hauler</th>
-                <th>Completed</th>
-                <th>Date to Load</th>
-                <th>Clear Date</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -890,15 +1019,8 @@
                 <th>Bales</th>
                 <th>Location</th>
                 <th>Date to Load</th>
-                <th>Clear Date</th>
-                <th>Date Loaded</th>
                 <th>Load Status</th>
-                <th>Loaded By</th>
-                <th>Container</th>
-                <th>Vehicle ID</th>
-                <th>Truck Line</th>
-                <th>Driver</th>
-                <th>Driver Phone</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody id="loadingTableBody"></tbody>
@@ -1453,6 +1575,19 @@ function renderWarehouse() {
   } else {
     renderWarehouseMap();
   }
+}
+
+function isLateLoad(m) {
+  if (!m?.dateToLoad) return false;
+  if ((m.loadingStatus || '') === 'Loaded') return false;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const dt = new Date(m.dateToLoad);
+  if (isNaN(dt.getTime())) return false;
+
+  return dt < today;
 }
 
 
@@ -2279,7 +2414,94 @@ function exportReportsAsPDF() {
       <body>
         <h3>Mark Tracker Report</h3>
         ${contentEl.innerHTML}
-      </body>
+      
+  <!-- ========== BREAK EDIT DRAWER ========== -->
+  <div id="breakDrawerOverlay" class="drawer-overlay hidden" onclick="if(event.target===this) closeBreakDrawer();">
+    <div class="drawer-panel" role="dialog" aria-modal="true">
+      <div class="drawer-header">
+        <div class="drawer-title" id="bd_title">Edit Mark</div>
+        <button class="btn-ghost btn-sm" onclick="closeBreakDrawer()">✕</button>
+      </div>
+
+      <div class="drawer-body">
+        <div class="drawer-grid">
+          <div class="drawer-field">
+            <label>MARK</label>
+            <input id="bd_mark" disabled />
+          </div>
+          <div class="drawer-field">
+            <label>Order ID</label>
+            <input id="bd_orderId" disabled />
+          </div>
+
+          <div class="drawer-field">
+            <label>Bale Count</label>
+            <input id="bd_bales" disabled />
+          </div>
+          <div class="drawer-field">
+            <label>Location</label>
+            <input id="bd_location" />
+          </div>
+
+          <div class="drawer-field">
+            <label>Ready to Break</label>
+            <select id="bd_ready">
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </div>
+
+          <div class="drawer-field">
+            <label>Status</label>
+            <select id="bd_breakStatus">
+              <option value="Not Started">Not Started</option>
+              <option value="Ready">Ready</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Completed">Completed</option>
+              <option value="Completed Breaking">Completed Breaking</option>
+            </select>
+          </div>
+
+          <div class="drawer-field">
+            <label>Breakers</label>
+            <input id="bd_breakers" placeholder="Sean, Junior..." />
+          </div>
+          <div class="drawer-field">
+            <label>Hauler</label>
+            <input id="bd_hauler" placeholder="Sean..." />
+          </div>
+
+          <div class="drawer-field">
+            <label>Date Completed</label>
+            <input id="bd_dateCompleted" type="date" />
+          </div>
+          <div class="drawer-field">
+            <label>Date to Load</label>
+            <input id="bd_dateToLoad" type="date" />
+          </div>
+
+          <div class="drawer-field">
+            <label>Clear Date</label>
+            <input id="bd_clearDate" type="date" />
+          </div>
+          <div class="drawer-field">
+            <label>Cleared?</label>
+            <select id="bd_cleared">
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="drawer-footer">
+        <button class="btn-outline btn-sm" onclick="closeBreakDrawer()">Close</button>
+        <button class="btn-primary btn-sm" onclick="saveBreakDrawer()">Save</button>
+      </div>
+    </div>
+  </div>
+
+</body>
     </html>
   `);
   win.document.close();
@@ -2432,7 +2654,282 @@ function exportReportsAsPDF() {
 	  pushMarkToSheets(m);
     }
 
-    function deleteMark(id) {
+    // ===== BREAK DRAWER HELPERS =====
+    let _breakDrawerId = null;
+
+    function openBreakDrawer(id) {
+      const m = marks.find(x => x.id === id);
+      if (!m) return;
+
+      _breakDrawerId = id;
+
+      document.getElementById('bd_title').textContent = `Edit ${m.mark || ''}`;
+      document.getElementById('bd_mark').value = m.mark || '';
+      document.getElementById('bd_orderId').value = m.orderId || '';
+      document.getElementById('bd_bales').value = m.baleCount ?? '';
+      document.getElementById('bd_location').value = m.location || '';
+
+      document.getElementById('bd_ready').value = m.readyToBreak ? 'yes' : 'no';
+      document.getElementById('bd_breakStatus').value = m.breakStatus || 'Not Started';
+
+      document.getElementById('bd_breakers').value = m.breakers || '';
+      document.getElementById('bd_hauler').value = m.hauler || '';
+
+      document.getElementById('bd_dateCompleted').value = m.dateCompleted || '';
+      document.getElementById('bd_dateToLoad').value = m.dateToLoad || '';
+
+      document.getElementById('bd_clearDate').value = m.clearDate || '';
+      document.getElementById('bd_cleared').value = m.cleared ? 'yes' : 'no';
+
+      document.getElementById('breakDrawerOverlay').classList.remove('hidden');
+    }
+
+    function closeBreakDrawer() {
+      document.getElementById('breakDrawerOverlay')?.classList.add('hidden');
+      _breakDrawerId = null;
+    }
+
+    function saveBreakDrawer() {
+      if (!_breakDrawerId) return;
+      const m = marks.find(x => x.id === _breakDrawerId);
+      if (!m) return;
+
+      const today = new Date().toISOString().slice(0, 10);
+
+      const location = (document.getElementById('bd_location').value || '').trim();
+      const ready = document.getElementById('bd_ready').value === 'yes';
+      let breakStatus = document.getElementById('bd_breakStatus').value;
+
+      const breakers = (document.getElementById('bd_breakers').value || '').trim();
+      const hauler = (document.getElementById('bd_hauler').value || '').trim();
+      const dateCompleted = document.getElementById('bd_dateCompleted').value || '';
+      const dateToLoad = document.getElementById('bd_dateToLoad').value || '';
+
+      const cleared = document.getElementById('bd_cleared').value === 'yes';
+      const clearDate = document.getElementById('bd_clearDate').value || '';
+
+      // apply changes with your existing state rules
+      m.location = location;
+
+      m.readyToBreak = ready;
+      if (m.breakStatus === 'Not Started' && ready) m.breakStatus = 'Ready';
+      if (!ready && m.breakStatus === 'Ready') m.breakStatus = 'Not Started';
+
+      // Cleared marks must remain Completed
+      if (m.cleared && breakStatus !== 'Completed') {
+        breakStatus = 'Completed';
+      }
+
+      // Completing requires a date
+      if (breakStatus === 'Completed' && !m.dateCompleted) {
+        m.dateCompleted = dateCompleted || today;
+      }
+
+      m.breakStatus = breakStatus;
+
+      m.breakers = breakers;
+      m.hauler = hauler;
+
+      // dates
+      if (dateCompleted) m.dateCompleted = dateCompleted;
+      if (dateToLoad || dateToLoad === '') m.dateToLoad = dateToLoad;
+
+      // cleared + clear date
+      m.cleared = cleared;
+      if (cleared) {
+        m.clearDate = clearDate || m.clearDate || today;
+        if (!m.loadingStatus) m.loadingStatus = 'Not Loaded';
+      } else {
+        m.clearDate = '';
+      }
+
+      saveData();
+      pushMarkToSheets(m);
+
+      // refresh key views
+      renderBreakTable();
+      renderLoadingTable();
+      renderAllMarks();
+      renderWarehouse();
+      renderCalendar();
+
+      closeBreakDrawer();
+    }
+
+
+    
+
+    // ===== PINK TAG PRINT (MARK + ORDER + BALES + QR) =====
+    function esc(s) {
+      return String(s ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function findByIdOrMark(ref) {
+      if (!ref) return null;
+      if (typeof ref === 'object' && (ref.id || ref.mark)) return ref;
+
+      let s = String(ref).trim();
+      if (s.toLowerCase().startsWith('id:')) s = s.slice(3);
+
+      // by id
+      let m = marks.find(x => String(x.id || '') === s);
+      if (m) return m;
+
+      // by mark
+      const up = s.toUpperCase();
+      m = marks.find(x => String(x.mark || '').trim().toUpperCase() === up);
+      if (m) return m;
+
+      return null;
+    }
+
+    function printPinkCard(ref) {
+      const m = findByIdOrMark(ref);
+      if (!m) {
+        alert('Mark not found to print.');
+        return;
+      }
+
+      const mark = String(m.mark || '').trim();
+      const orderId = String(m.orderId || '').trim();
+      const bales = (m.baleCount ?? '');
+
+      // QR code contains ONLY the Mark text (scan later to search on mobile)
+      const qrUrl =
+        'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' +
+        encodeURIComponent(mark);
+
+      const w = window.open('', '_blank');
+      if (!w) {
+        alert('Popup blocked. Allow popups to print.');
+        return;
+      }
+
+      w.document.open();
+      w.document.write(`<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Pink Tag - ${esc(mark)}</title>
+  <style>
+    @media print { * { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+    @page { size: envelope-monarch landscape; margin: 0; }
+
+	html, body { width: 100%; height: 100%; }
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #fff;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 0.5in;
+      box-sizing: border-box;
+    }
+
+    .card {
+  width: 7.5in;
+  height: 3.25in;
+  background: #ffffff;
+  border: none;
+  border-radius: 0;
+  box-sizing: border-box;
+  padding: 18px 20px;
+  display: grid;
+  grid-template-columns: 1fr 240px;
+  gap: 14px;
+  align-items: center;
+}
+
+
+    .left { display: flex; flex-direction: column; justify-content: center; }
+
+    .mark {
+      font-weight: 900;
+      font-size: 72px;
+      line-height: 0.95;
+      letter-spacing: 3px;
+      word-break: break-word;
+    }
+
+    .order {
+      margin-top: 10px;
+      font-weight: 800;
+      font-size: 32px;
+      line-height: 1.0;
+    }
+
+    .bales {
+      margin-top: 10px;
+      font-weight: 800;
+      font-size: 28px;
+      line-height: 1.0;
+    }
+
+    .right {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .qr {
+  width: 220px;
+  height: 220px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+
+    .qr img { width: 220px; height: 220px; display: block; }
+
+    .qr-label {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      background: rgba(255,255,255,0.6);
+      border: 2px solid #000;
+      border-radius: 999px;
+      padding: 4px 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="left">
+      <div class="mark">${esc(mark)}</div>
+      <div class="order">Order: ${esc(orderId)}</div>
+      <div class="bales">Bales: ${esc(bales)}</div>
+    </div>
+
+    <div class="right">
+      <div class="qr">
+        <img src="${qrUrl}" alt="QR for ${esc(mark)}" />
+      </div>
+      <div class="qr-label">Scan to find: ${esc(mark)}</div>
+    </div>
+  </div>
+
+  <script>
+    window.onload = () => { window.focus(); window.print(); };
+  <\/script>
+</body>
+</html>`);
+      w.document.close();
+    }
+
+function deleteMark(id) {
       if (!confirm('Delete this mark?')) return;
       marks = marks.filter(m => m.id !== id);
       saveData();
@@ -2498,11 +2995,10 @@ function exportReportsAsPDF() {
 
     // ===== RENDER: BREAK TABLE =====
     function renderBreakTable() {
-    
-
       const tbody = document.getElementById('breakTableBody');
-      const q = (document.getElementById('searchBreak').value || '').trim().toLowerCase();
-      const rows = [];
+      if (!tbody) return;
+
+      const q = (document.getElementById('searchBreak')?.value || '').trim().toLowerCase();
 
       // Hide marks that are cleared AND completed/completed breaking
       const filtered = marks
@@ -2519,117 +3015,58 @@ function exportReportsAsPDF() {
           );
         });
 
+      // status ordering
       const statusOrder = ['Ready', 'In Progress', 'Not Started', 'Completed', 'Completed Breaking'];
 
-      statusOrder.forEach(status => {
-        const group = filtered
-          .filter(m => m.breakStatus === status)
-          .slice()
-          .sort((a, b) => {
-            const aDate = a.dateToLoad || '9999-12-31';
-            const bDate = b.dateToLoad || '9999-12-31';
-            if (aDate === bDate) {
-              return (a.mark || '').localeCompare(b.mark || '');
-            }
-            return aDate.localeCompare(bDate);
-          });
+      filtered.sort((a, b) => {
+        const ai = statusOrder.indexOf(a.breakStatus || '');
+        const bi = statusOrder.indexOf(b.breakStatus || '');
+        return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+      });
 
-        if (group.length === 0) return;
+      const rows = filtered.map(m => {
+        const rowClass =
+          m.breakStatus === 'Completed' || m.breakStatus === 'Completed Breaking'
+            ? 'completed'
+            : (m.breakStatus === 'In Progress' ? 'in-progress' : '');
 
-        // group header row
-        rows.push(`
-          <tr>
-            <td colspan="12" style="font-weight:600; font-size:11px; background:#f3f4f6;">
-              ${status} (${group.length})
+        return `
+          <tr class="${rowClass}">
+            <td><strong>${esc(m.mark || '')}</strong></td>
+            <td>${esc(m.orderId || '')}</td>
+            <td>${esc(m.baleCount ?? '')}</td>
+            <td>
+              <input type="text" value="${esc(m.location || '')}"
+                     onblur="updateMarkLocation('${m.id}', this.value)">
+            </td>
+            <td style="text-align:center;">
+              <input type="checkbox" ${m.readyToBreak ? 'checked' : ''}
+                     onchange="toggleReady('${m.id}', this.checked)">
+            </td>
+            <td>
+              <select onchange="updateMarkField('${m.id}', 'breakStatus', this.value)">
+                <option value="Not Started" ${m.breakStatus === 'Not Started' ? 'selected' : ''}>Not Started</option>
+                <option value="Ready" ${m.breakStatus === 'Ready' ? 'selected' : ''}>Ready</option>
+                <option value="In Progress" ${m.breakStatus === 'In Progress' ? 'selected' : ''}>In Progress</option>
+                <option value="Completed" ${m.breakStatus === 'Completed' ? 'selected' : ''}>Completed</option>
+                <option value="Completed Breaking" ${m.breakStatus === 'Completed Breaking' ? 'selected' : ''}>Completed Breaking</option>
+              </select>
+            </td>
+            <td style="white-space:nowrap;">
+              <button class="btn-sm" onclick="openBreakDrawer('${m.id}')">Edit</button>
+              <button class="btn-sm btn-outline" onclick="event.stopPropagation(); markAsCleared('${m.id}')">
+                ${m.cleared ? 'Unclear' : 'Clear'}
+              </button>
+              <button class="btn-sm" onclick="event.stopPropagation(); printPinkCard('${m.id}')">Pink Tag</button>
             </td>
           </tr>
-        `);
-
-        group.forEach(m => {
-          const trClass =
-            m.breakStatus === 'Completed' || m.breakStatus === 'Completed Breaking'
-              ? 'completed'
-              : (m.breakStatus === 'In Progress' ? 'in-progress' : '');
-
-          rows.push(`
-            <tr class="${trClass}">
-              <td>${m.mark}</td>
-              <td>${m.orderId}</td>
-              <td>${m.baleCount}</td>
-              <td>
-  <input type="text" value="${m.location || ''}" 
-         onblur="updateMarkLocation('${m.id}', this.value)">
-</td>
-
-              <td>
-                <input type="checkbox" ${m.readyToBreak ? 'checked' : ''} 
-                  onchange="toggleReady('${m.id}', this.checked)">
-              </td>
-
-              <td>
-                <select onchange="updateMarkField('${m.id}', 'breakStatus', this.value)">
-                  <option value="Not Started" ${m.breakStatus === 'Not Started' ? 'selected' : ''}>Not Started</option>
-                  <option value="Ready" ${m.breakStatus === 'Ready' ? 'selected' : ''}>Ready</option>
-                  <option value="In Progress" ${m.breakStatus === 'In Progress' ? 'selected' : ''}>In Progress</option>
-                  <option value="Completed" ${m.breakStatus === 'Completed' ? 'selected' : ''}>Completed</option>
-                  <option value="Completed Breaking" ${m.breakStatus === 'Completed Breaking' ? 'selected' : ''}>Completed Breaking</option>
-                </select>
-              </td>
-
-             <td>
-  <input 
-    type="text" 
-    value="${m.breakers || ''}" 
-    onblur="updateMarkField('${m.id}', 'breakers', this.value)"
-  >
-</td>
-
-<td>
-  <input 
-    type="text" 
-    value="${m.hauler || ''}" 
-    onblur="updateMarkField('${m.id}', 'hauler', this.value)"
-  >
-</td>
-
-		<td>
-  <input
-    type="date"
-    value="${m.dateCompleted || ''}"
-    onblur="updateMarkField('${m.id}', 'dateCompleted', this.value)">
-</td>
-
-<td>
-  <input
-    type="date"
-    value="${m.dateToLoad || ''}"
-    onblur="updateMarkField('${m.id}', 'dateToLoad', this.value)">
-</td>
-
-<td>
-  <input
-    type="date"
-    value="${m.clearDate || ''}"
-    onblur="updateMarkField('${m.id}', 'clearDate', this.value)">
-</td>
-
-<td>
-  <button class="btn-sm btn-outline" onclick="markAsCleared('${m.id}')">
-    ${m.cleared ? 'Unclear' : 'Clear'}
-  </button>
-</td>
-
-            </tr>
-          `);
-        });
+        `;
       });
 
       tbody.innerHTML =
-        rows.join('') || '<tr><td colspan="12" class="muted">No marks yet.</td></tr>';
-		
-		updateBadges();
+        rows.join('') || '<tr><td colspan="7" class="muted">No marks yet.</td></tr>';
 
-		
+      updateBadges();
     }
 
 function updateMarkLocation(id, newLocation) {
@@ -2653,12 +3090,75 @@ function updateMarkLocation(id, newLocation) {
 
 
 
+    
+    // ===== LOADING DRAWER =====
+    let _loadingDrawerRef = null;
+
+    function openLoadingDrawer(ref) {
+      const overlay = document.getElementById('loadingDrawerOverlay');
+      if (!overlay) return alert('Loading drawer HTML missing');
+
+      const m = findByIdOrMark(ref);
+      if (!m) return alert('Mark not found');
+
+      _loadingDrawerRef = m.id || m.mark || null;
+
+      document.getElementById('loadingDrawerTitle').textContent = 'Edit Loading — ' + (m.mark || '');
+      document.getElementById('ld_mark').value = m.mark || '';
+      document.getElementById('ld_orderId').value = m.orderId || '';
+      document.getElementById('ld_baleCount').value = (m.baleCount ?? '');
+
+      document.getElementById('ld_location').value = m.location || '';
+      document.getElementById('ld_dateToLoad').value = m.dateToLoad || '';
+      document.getElementById('ld_loadingStatus').value = m.loadingStatus || 'Not Loaded';
+      document.getElementById('ld_dateLoaded').value = m.dateLoaded || '';
+      document.getElementById('ld_loadedBy').value = m.loadedBy || '';
+      document.getElementById('ld_containerType').value = m.containerType || '';
+      document.getElementById('ld_vehicleId').value = m.vehicleId || '';
+      document.getElementById('ld_truckline').value = m.truckline || '';
+      document.getElementById('ld_driverName').value = m.driverName || '';
+      document.getElementById('ld_driverPhone').value = m.driverPhone || '';
+
+      overlay.classList.remove('hidden');
+    }
+
+    function closeLoadingDrawer() {
+      document.getElementById('loadingDrawerOverlay')?.classList.add('hidden');
+      _loadingDrawerRef = null;
+    }
+
+    function saveLoadingDrawer() {
+      if (!_loadingDrawerRef) return;
+      const m = findByIdOrMark(_loadingDrawerRef);
+      if (!m) return alert('Mark not found');
+
+      m.location = document.getElementById('ld_location').value.trim();
+      m.dateToLoad = document.getElementById('ld_dateToLoad').value;
+      m.loadingStatus = document.getElementById('ld_loadingStatus').value;
+      m.dateLoaded = document.getElementById('ld_dateLoaded').value;
+      m.loadedBy = document.getElementById('ld_loadedBy').value.trim();
+      m.containerType = document.getElementById('ld_containerType').value.trim();
+      m.vehicleId = document.getElementById('ld_vehicleId').value.trim();
+      m.truckline = document.getElementById('ld_truckline').value.trim();
+      m.driverName = document.getElementById('ld_driverName').value.trim();
+      m.driverPhone = document.getElementById('ld_driverPhone').value.trim();
+
+      saveData();
+      pushMarkToSheets(m);
+      closeLoadingDrawer();
+    }
+
+// ===== RENDER: LOADING TABLE =====
+    
     // ===== RENDER: LOADING TABLE =====
     function renderLoadingTable() {
       const tbody = document.getElementById('loadingTableBody');
-      const q = (document.getElementById('searchLoading').value || '').trim().toLowerCase();
+      if (!tbody) return;
+
+      const q = (document.getElementById('searchLoading')?.value || '').trim().toLowerCase();
       const rows = [];
 
+      // Loading = cleared + break completed
       const filtered = marks
         .filter(m =>
           m.cleared &&
@@ -2667,9 +3167,9 @@ function updateMarkLocation(id, newLocation) {
         .filter(m => {
           if (!q) return true;
           return (
-            (m.mark || '').toLowerCase().includes(q) ||
-            (m.orderId || '').toLowerCase().includes(q) ||
-            (m.location || '').toLowerCase().includes(q)
+            (m.mark || '').toString().toLowerCase().includes(q) ||
+            (m.orderId || '').toString().toLowerCase().includes(q) ||
+            (m.location || '').toString().toLowerCase().includes(q)
           );
         });
 
@@ -2682,75 +3182,31 @@ function updateMarkLocation(id, newLocation) {
           .sort((a, b) => {
             const aDate = a.dateToLoad || '9999-12-31';
             const bDate = b.dateToLoad || '9999-12-31';
-            if (aDate === bDate) {
-              return (a.mark || '').localeCompare(b.mark || '');
-            }
+            if (aDate === bDate) return (a.mark || '').localeCompare(b.mark || '');
             return aDate.localeCompare(bDate);
           });
 
         if (!group.length) return;
 
         rows.push(`
-          <tr>
-            <td colspan="14" style="font-weight:600; font-size:11px; background:#f3f4f6;">
-              ${status} (${group.length})
-            </td>
+          <tr class="group-row">
+            <td colspan="7"><strong>${esc(status)}</strong> (${group.length})</td>
           </tr>
         `);
 
         group.forEach(m => {
-          const trClass =
-            m.loadingStatus === 'Loaded'
-              ? 'completed'
-              : m.loadingStatus === 'In Progress'
-              ? 'in-progress'
-              : '';
-
+          const ref = JSON.stringify(m.id || m.mark || '');
           rows.push(`
-            <tr class="${trClass}">
-              <td>${m.mark}</td>
-<td>${m.orderId}</td>
-<td>${m.baleCount}</td>
-<td>${m.location || ''}</td>
-
-<td>
-  <input
-    type="date"
-    value="${m.dateToLoad || ''}"
-    onblur="updateMarkField('${m.id}', 'dateToLoad', this.value)">
-</td>
-
-<td>
-  <input
-    type="date"
-    value="${m.clearDate || ''}"
-    onblur="updateMarkField('${m.id}', 'clearDate', this.value)">
-</td>
-
-<td>
-  <input
-    type="date"
-    value="${m.dateLoaded || ''}"
-    onblur="updateMarkField('${m.id}', 'dateLoaded', this.value)">
-</td>
-
-
-<td>
-  <select onchange="updateMarkField('${m.id}', 'loadingStatus', this.value)">
-    <option value="Not Loaded" ${m.loadingStatus === "Not Loaded" ? 'selected' : ''}>Not Loaded</option>
-    <option value="Waiting" ${m.loadingStatus === "Waiting" ? 'selected' : ''}>Waiting</option>
-    <option value="In Progress" ${m.loadingStatus === "In Progress" ? 'selected' : ''}>In Progress</option>
-    <option value="Loaded" ${m.loadingStatus === "Loaded" ? 'selected' : ''}>Loaded</option>
-  </select>
-</td>
-
-<td><input type="text" value="${m.loadedBy || ''}" onblur="updateMarkField('${m.id}', 'loadedBy', this.value)"></td>
-<td><input type="text" value="${m.containerType || ''}" onblur="updateMarkField('${m.id}', 'containerType', this.value)"></td>
-<td><input type="text" value="${m.vehicleId || ''}" onblur="updateMarkField('${m.id}', 'vehicleId', this.value)"></td>
-<td><input type="text" value="${m.truckline || ''}" onblur="updateMarkField('${m.id}', 'truckline', this.value)"></td>
-<td><input type="text" value="${m.driverName || ''}" onblur="updateMarkField('${m.id}', 'driverName', this.value)"></td>
-<td><input type="text" value="${m.driverPhone || ''}" onblur="updateMarkField('${m.id}', 'driverPhone', this.value)"></td>
-
+            <tr class="${m.loadingStatus === 'Loaded' ? 'row-loaded' : ''}">
+              <td><strong>${esc(m.mark || '')}</strong></td>
+              <td>${esc(m.orderId || '')}</td>
+              <td>${esc(m.baleCount ?? '')}</td>
+              <td>${esc(m.location || '')}</td>
+              <td>${esc(m.dateToLoad || '')}</td>
+              <td>${esc(m.loadingStatus || 'Not Loaded')}</td>
+              <td>
+                <button class="btn-sm" onclick='openLoadingDrawer(${ref})'>Edit</button>
+              </td>
             </tr>
           `);
         });
@@ -2758,10 +3214,9 @@ function updateMarkLocation(id, newLocation) {
 
       tbody.innerHTML =
         rows.join('') ||
-        '<tr><td colspan="14" class="muted">No cleared marks yet.</td></tr>';
-		
-		updateBadges();
+        '<tr><td colspan="7" class="muted">No cleared marks yet.</td></tr>';
 
+      updateBadges();
     }
 
     // ===== RENDER: COMPLETED TABLE =====
@@ -2965,19 +3420,24 @@ function getCalendarTooltip(m) {
     todaysMarks.forEach(m => {
       const dotClass = getCalendarDotClass(m);
       const tip = getCalendarTooltip(m);
+	 // ✅ LATE badge (only if not loaded and dateToLoad is before today)
+	  const lateBadge = isLateLoad(m)
+		? ' <span class="late-badge">LATE</span>'
+		: '';
+		
 
-      marksHtml += `
-        <div class="calendar-mark">
-          <div>
-            <span class="calendar-dot ${dotClass}" title="${tip}"></span>
-            <strong>${m.mark}</strong> · ${m.orderId}
-          </div>
-          <div class="muted" style="font-size:11px;">
-            Bales: ${m.baleCount} · ${m.location || ''}
-          </div>
-        </div>
-      `;
-    });
+  marksHtml += `
+    <div class="calendar-mark">
+      <div>
+        <span class="calendar-dot ${dotClass}" title="${tip}"></span>
+        <strong>${m.mark}</strong>${lateBadge} · ${m.orderId}
+      </div>
+      <div class="muted" style="font-size:11px;">
+        Bales: ${m.baleCount} · ${m.location || ''}
+      </div>
+    </div>
+  `;
+});
 
     const isToday = dateStr === todayStr;
 
@@ -3154,9 +3614,186 @@ function getCalendarTooltip(m) {
 </div>
 
 
+
+  <!-- ========== BREAK EDIT DRAWER ========== -->
+  <div id="breakDrawerOverlay" class="drawer-overlay hidden" onclick="if(event.target===this) closeBreakDrawer();">
+    <div class="drawer-panel" role="dialog" aria-modal="true">
+      <div class="drawer-header">
+        <div class="drawer-title" id="bd_title">Edit Mark</div>
+        <button class="btn-ghost btn-sm" onclick="closeBreakDrawer()">✕</button>
+      </div>
+
+      <div class="drawer-body">
+        <div class="drawer-grid">
+          <div class="drawer-field">
+            <label>MARK</label>
+            <input id="bd_mark" disabled />
+          </div>
+          <div class="drawer-field">
+            <label>Order ID</label>
+            <input id="bd_orderId" disabled />
+          </div>
+
+          <div class="drawer-field">
+            <label>Bale Count</label>
+            <input id="bd_bales" disabled />
+          </div>
+          <div class="drawer-field">
+            <label>Location</label>
+            <input id="bd_location" />
+          </div>
+
+          <div class="drawer-field">
+            <label>Ready to Break</label>
+            <select id="bd_ready">
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </div>
+
+          <div class="drawer-field">
+            <label>Status</label>
+            <select id="bd_breakStatus">
+              <option value="Not Started">Not Started</option>
+              <option value="Ready">Ready</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Completed">Completed</option>
+              <option value="Completed Breaking">Completed Breaking</option>
+            </select>
+          </div>
+
+          <div class="drawer-field">
+            <label>Breakers</label>
+            <input id="bd_breakers" placeholder="Sean, Junior..." />
+          </div>
+          <div class="drawer-field">
+            <label>Hauler</label>
+            <input id="bd_hauler" placeholder="Sean..." />
+          </div>
+
+          <div class="drawer-field">
+            <label>Date Completed</label>
+            <input id="bd_dateCompleted" type="date" />
+          </div>
+          <div class="drawer-field">
+            <label>Date to Load</label>
+            <input id="bd_dateToLoad" type="date" />
+          </div>
+
+          <div class="drawer-field">
+            <label>Clear Date</label>
+            <input id="bd_clearDate" type="date" />
+          </div>
+          <div class="drawer-field">
+            <label>Cleared?</label>
+            <select id="bd_cleared">
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="drawer-footer">
+        <button class="btn-outline btn-sm" onclick="closeBreakDrawer()">Close</button>
+        <button class="btn-primary btn-sm" onclick="saveBreakDrawer()">Save</button>
+      </div>
+    </div>
+  </div>
+
+
+<!-- ==========================
+     Loading Drawer (Edit Panel)
+     ========================== -->
+<div id="loadingDrawerOverlay" class="drawer-overlay hidden" onclick="closeLoadingDrawer(event)">
+  <div class="drawer-panel" onclick="event.stopPropagation()">
+    <div class="drawer-header">
+      <div class="drawer-title" id="loadingDrawerTitle">Edit Loading</div>
+      <button class="btn-ghost" onclick="closeLoadingDrawer()">✕</button>
+    </div>
+
+    <div class="drawer-body">
+      <div class="drawer-grid">
+        <div class="drawer-field">
+          <label>MARK</label>
+          <input id="ld_mark" disabled />
+        </div>
+
+        <div class="drawer-field">
+          <label>Order ID</label>
+          <input id="ld_orderId" />
+        </div>
+
+        <div class="drawer-field">
+          <label>Bale Count</label>
+          <input id="ld_baleCount" type="number" />
+        </div>
+
+        <div class="drawer-field">
+          <label>Location</label>
+          <input id="ld_location" />
+        </div>
+
+        <div class="drawer-field">
+          <label>Date to Load</label>
+          <input id="ld_dateToLoad" type="date" />
+        </div>
+
+        <div class="drawer-field">
+          <label>Load Status</label>
+          <select id="ld_loadingStatus">
+            <option value="Not Loaded">Not Loaded</option>
+            <option value="Loaded">Loaded</option>
+          </select>
+        </div>
+
+        <div class="drawer-field">
+          <label>Date Loaded</label>
+          <input id="ld_dateLoaded" type="date" />
+        </div>
+
+        <div class="drawer-field">
+          <label>Loaded By</label>
+          <input id="ld_loadedBy" />
+        </div>
+
+        <div class="drawer-field">
+          <label>Container</label>
+          <input id="ld_containerType" />
+        </div>
+
+        <div class="drawer-field">
+          <label>Vehicle ID</label>
+          <input id="ld_vehicleId" />
+        </div>
+
+        <div class="drawer-field">
+          <label>Truck Line</label>
+          <input id="ld_truckline" />
+        </div>
+
+        <div class="drawer-field">
+          <label>Driver</label>
+          <input id="ld_driverName" />
+        </div>
+
+        <div class="drawer-field">
+          <label>Driver Phone</label>
+          <input id="ld_driverPhone" />
+        </div>
+      </div>
+    </div>
+
+    <div class="drawer-footer">
+      <button class="btn-outline" onclick="closeLoadingDrawer()">Close</button>
+      <button class="btn-primary" onclick="saveLoadingDrawer()">Save</button>
+    </div>
+  </div>
+</div>
+
+
 </body>
 </html>
-
 
 
 
