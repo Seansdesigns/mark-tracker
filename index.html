@@ -465,6 +465,44 @@
       gap: 8px;
       margin-bottom: 8px;
     }
+.prev-month-wrap{
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px;
+  margin: 10px 0 12px;
+}
+.prev-month-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  margin-bottom:8px;
+}
+.prev-month-title{ font-weight: 800; }
+.prev-month-count{ color:#6b7280; font-size:12px; }
+
+.prev-month-table-scroll{ overflow:auto; max-height: 220px; }
+.prev-month-table{ width:100%; border-collapse: collapse; font-size: 12px; }
+.prev-month-table th, .prev-month-table td{
+  padding: 6px 8px;
+  border-bottom: 1px solid #f1f5f9;
+  white-space: nowrap;
+}
+.prev-month-table td strong{ font-weight: 800; }
+
+/* reuse your late badge style (if you already added it, keep only one copy) */
+.late-badge{
+  display:inline-block;
+  margin-left:6px;
+  padding:1px 6px;
+  font-size:10px;
+  font-weight:800;
+  border-radius:999px;
+  background:#dc2626;
+  color:#fff;
+  vertical-align:middle;
+}
 
     .calendar-grid {
       display: grid;
@@ -1149,6 +1187,29 @@
       <button class="btn-outline btn-sm" onclick="nextMonth()">→</button>
     </div>
 
+<div id="prevMonthNotLoadedWrap" class="prev-month-wrap">
+  <div class="prev-month-head">
+    <div class="prev-month-title" id="prevMonthTitle">Last Month Not Loaded</div>
+    <div class="prev-month-count" id="prevMonthCount"></div>
+  </div>
+
+  <div class="prev-month-table-scroll">
+    <table class="prev-month-table">
+      <thead>
+        <tr>
+          <th>MARK</th>
+          <th>Order ID</th>
+          <th>Bales</th>
+          <th>Location</th>
+          <th>Date to Load</th>
+        </tr>
+      </thead>
+      <tbody id="prevMonthNotLoadedBody"></tbody>
+    </table>
+  </div>
+</div>
+
+
     <div id="calendarGrid" class="calendar-grid"></div>
   </div>
 </div>
@@ -1485,19 +1546,24 @@ function closeMarkDetails() {
 }
 
 function getDaysWaiting(mark) {
-  const baseDate = mark.dateCompleted || mark.dateToLoad;
-  if (!baseDate) return null;
+  // Start from Date To Load, but counting begins the NEXT day
+  const baseStr = normalizeDateString(mark?.dateToLoad || '');
+  if (!baseStr) return 0;
 
-  const start = new Date(baseDate);
-  if (isNaN(start.getTime())) return null;
+  const start = new Date(baseStr);
+  if (isNaN(start.getTime())) return 0;
+
+  start.setHours(0, 0, 0, 0);
 
   const today = new Date();
-  const diff = Math.floor(
-    (today - start) / (1000 * 60 * 60 * 24)
-  );
+  today.setHours(0, 0, 0, 0);
 
-  return diff >= 0 ? diff : null;
+  const diffDays = Math.floor((today - start) / 86400000);
+
+  // ✅ "Day after" rule: same day = 0, next day = 1, etc.
+  return Math.max(0, diffDays - 1);
 }
+
 
 function isLateMark(mark) {
   if (!mark.dateToLoad) return false;
@@ -1588,6 +1654,79 @@ function isLateLoad(m) {
   if (isNaN(dt.getTime())) return false;
 
   return dt < today;
+}
+
+function getPrevMonthRange(year, monthIndex0) {
+  // monthIndex0 is 0-11 (currentCalendarMonth)
+  // We want the previous month of the currently viewed month.
+  const start = new Date(year, monthIndex0 - 1, 1);
+  const end = new Date(year, monthIndex0, 0); // last day of prev month
+  start.setHours(0,0,0,0);
+  end.setHours(0,0,0,0);
+
+  const fmt = d => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,'0');
+    const da = String(d.getDate()).padStart(2,'0');
+    return `${y}-${m}-${da}`;
+  };
+  return { start, end, startStr: fmt(start), endStr: fmt(end) };
+}
+
+function isLateByDateStr(dateStr, loadingStatus) {
+  if (!dateStr) return false;
+  if ((loadingStatus || '') === 'Loaded') return false;
+
+  const today = new Date();
+  today.setHours(0,0,0,0);
+
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return false;
+  d.setHours(0,0,0,0);
+
+  return d < today;
+}
+
+function renderPrevMonthNotLoaded() {
+  const body = document.getElementById('prevMonthNotLoadedBody');
+  const titleEl = document.getElementById('prevMonthTitle');
+  const countEl = document.getElementById('prevMonthCount');
+  const wrap = document.getElementById('prevMonthNotLoadedWrap');
+  if (!body || !titleEl || !countEl || !wrap) return;
+
+  const { startStr, endStr, start } = getPrevMonthRange(currentCalendarYear, currentCalendarMonth);
+  const monthName = monthNames[start.getMonth()];
+  titleEl.textContent = `${monthName} Not Loaded`;
+
+  const list = marks
+    .filter(m => {
+      const dt = (m.dateToLoad || '');
+      if (!dt) return false;
+      if (dt < startStr || dt > endStr) return false;
+      return (m.loadingStatus || 'Not Loaded') !== 'Loaded';
+    })
+    .slice()
+    .sort((a,b) => (a.dateToLoad || '').localeCompare(b.dateToLoad || '') || (a.mark||'').localeCompare(b.mark||''));
+
+  countEl.textContent = list.length ? `${list.length} mark(s)` : 'None 🎉';
+
+  if (!list.length) {
+    body.innerHTML = `<tr><td colspan="5" class="muted">No remaining marks from last month.</td></tr>`;
+    return;
+  }
+
+  body.innerHTML = list.map(m => {
+    const late = isLateByDateStr(m.dateToLoad, m.loadingStatus);
+    return `
+      <tr>
+        <td><strong>${esc(m.mark || '')}</strong>${late ? ' <span class="late-badge">LATE</span>' : ''}</td>
+        <td>${esc(m.orderId || '')}</td>
+        <td>${esc(m.baleCount ?? '')}</td>
+        <td>${esc(m.location || '')}</td>
+        <td>${esc(m.dateToLoad || '')}</td>
+      </tr>
+    `;
+  }).join('');
 }
 
 
@@ -3451,6 +3590,10 @@ function getCalendarTooltip(m) {
   }
 
   grid.innerHTML = html;
+
+renderPrevMonthNotLoaded();
+
+
 }
 
 
