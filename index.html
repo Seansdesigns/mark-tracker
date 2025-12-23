@@ -1230,6 +1230,17 @@
     let lastSync = 0;
     const STORAGE_KEY = 'markTrackerData.v5';
     const STORAGE_TS_KEY = 'markTrackerLastSync.v5';
+
+// ===== SNAPSHOT RUNNING BALE TOTALS =====
+const SNAP_BASE_KEY = 'snapshotBaseBales.v1';
+const SNAP_RECEIVED_KEY = 'snapshotReceivedTotal.v1';
+const SNAP_RETURN_KEY = 'snapshotReturnTotal.v1';
+
+// Starting Total (edit any time in Snapshot)
+let snapshotBaseBales = 27805;
+let snapshotReceivedTotal = 0;
+let snapshotReturnTotal = 0;
+
     const API_BASE =
       'https://script.google.com/macros/s/AKfycbw10SBKQxATzLp_lU07B0K5OaeGf4OpF8PDF4byihFQ0QXsFM0lLQY5OC3awPI8c-PP9g/exec';
 
@@ -1380,10 +1391,76 @@ document.addEventListener("focusout", () => {
       renderAll();
     }
 
+// ===== SNAPSHOT BALE TOTAL HELPERS =====
+function toInt(val) {
+  const n = parseInt(String(val ?? '').replace(/[^\d-]/g, ''), 10);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function loadSnapshotTotals() {
+  try {
+    const b = localStorage.getItem(SNAP_BASE_KEY);
+    const r = localStorage.getItem(SNAP_RECEIVED_KEY);
+    const g = localStorage.getItem(SNAP_RETURN_KEY);
+
+    if (b !== null) snapshotBaseBales = toInt(b);
+    if (r !== null) snapshotReceivedTotal = toInt(r);
+    if (g !== null) snapshotReturnTotal = toInt(g);
+  } catch (e) {
+    console.warn('Snapshot totals load failed', e);
+  }
+}
+
+function saveSnapshotTotals() {
+  try {
+    localStorage.setItem(SNAP_BASE_KEY, String(toInt(snapshotBaseBales)));
+    localStorage.setItem(SNAP_RECEIVED_KEY, String(toInt(snapshotReceivedTotal)));
+    localStorage.setItem(SNAP_RETURN_KEY, String(toInt(snapshotReturnTotal)));
+  } catch (e) {
+    console.warn('Snapshot totals save failed', e);
+  }
+}
+
+function setSnapshotBase() {
+  const el = document.getElementById('snapshotBaseBales');
+  snapshotBaseBales = toInt(el?.value);
+  saveSnapshotTotals();
+  renderSnapshot();
+}
+
+function addSnapshotReceived() {
+  const el = document.getElementById('snapshotReceivedInput');
+  const amt = toInt(el?.value);
+  if (!amt) return;
+  snapshotReceivedTotal += amt;
+  if (el) el.value = '';
+  saveSnapshotTotals();
+  renderSnapshot();
+}
+
+function addSnapshotReturn() {
+  const el = document.getElementById('snapshotReturnInput');
+  const amt = toInt(el?.value);
+  if (!amt) return;
+  snapshotReturnTotal += amt;
+  if (el) el.value = '';
+  saveSnapshotTotals();
+  renderSnapshot();
+}
+
+function resetSnapshotAdjustments() {
+  snapshotReceivedTotal = 0;
+  snapshotReturnTotal = 0;
+  saveSnapshotTotals();
+  renderSnapshot();
+}
+
+
    // ===== SHEETS SYNC =====
 async function loadMarksFromSheets() {
   // Start from whatever's local
   loadData();
+  loadSnapshotTotals();
   renderAll();
 
   // ✅ Snapshot refresh (local)
@@ -1994,6 +2071,9 @@ function renderSnapshot() {
   const container = document.getElementById('snapshotContent');
   if (!container) return;
 
+  // Ensure snapshot totals loaded (safe if called multiple times)
+  if (typeof loadSnapshotTotals === 'function') loadSnapshotTotals();
+
   console.log('✅ renderSnapshot called', {
     marksExists: Array.isArray(marks),
     marksLength: marks?.length,
@@ -2027,11 +2107,59 @@ function renderSnapshot() {
     }
   });
 
-  const flowPct = n =>
-    total ? Math.round((n / total) * 100) : 0;
+  const flowPct = n => (total ? Math.round((n / total) * 100) : 0);
+
+  // ===== Running Bale Total (Base + Received - Return - Marks) =====
+  const marksBalesTotal = Array.isArray(marks)
+    ? marks.reduce((sum, m) => sum + toInt(m?.baleCount), 0)
+    : 0;
+
+  const remaining =
+    toInt(snapshotBaseBales) +
+    toInt(snapshotReceivedTotal) -
+    toInt(snapshotReturnTotal) -
+    marksBalesTotal;
 
   container.innerHTML = `
     <div class="card">
+
+      <div style="margin-bottom:12px;">
+        <div class="muted" style="font-size:12px;">Running Warehouse Bales</div>
+        <div style="font-size:30px; font-weight:900; line-height:1;">
+          ${remaining.toLocaleString()}
+        </div>
+        <div class="muted" style="font-size:12px; margin-top:4px;">
+          Base <strong>${toInt(snapshotBaseBales).toLocaleString()}</strong>
+          · Marks <strong>${marksBalesTotal.toLocaleString()}</strong>
+          · +Received <strong>${toInt(snapshotReceivedTotal).toLocaleString()}</strong>
+          · -Return <strong>${toInt(snapshotReturnTotal).toLocaleString()}</strong>
+        </div>
+
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; align-items:flex-end;">
+          <div>
+            <label class="muted" style="font-size:11px;">Base</label><br/>
+            <input id="snapshotBaseBales" type="number" style="width:110px;" value="${toInt(snapshotBaseBales)}">
+            <button class="btn-sm" onclick="setSnapshotBase()">Set</button>
+          </div>
+
+          <div>
+            <label class="muted" style="font-size:11px;">Received Today (+)</label><br/>
+            <input id="snapshotReceivedInput" type="number" style="width:110px;">
+            <button class="btn-sm" onclick="addSnapshotReceived()">Add</button>
+          </div>
+
+          <div>
+            <label class="muted" style="font-size:11px;">Gin Return (-)</label><br/>
+            <input id="snapshotReturnInput" type="number" style="width:110px;">
+            <button class="btn-sm btn-outline" onclick="addSnapshotReturn()">Subtract</button>
+          </div>
+
+          <div>
+            <button class="btn-sm btn-outline" onclick="resetSnapshotAdjustments()">Reset</button>
+          </div>
+        </div>
+      </div>
+
       <div class="snapshot-kpis">
         <div class="kpi"><strong>${total}</strong><span>Total in Shipping Shed</span></div>
         <div class="kpi"><strong>${breakCount}</strong><span>In Break</span></div>
@@ -2711,6 +2839,7 @@ function exportReportsAsPDF() {
 
   marks.push(newMark);
   saveData();
+  renderSnapshot();
   pushMarkToSheets(newMark);
 
   e.target.reset();
