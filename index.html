@@ -141,7 +141,6 @@
 
 
 
-
     /* ======================================================
        🔥 BREAK TABLE ACTIONS COLUMN — PERMANENT FIX
        ====================================================== */
@@ -205,6 +204,29 @@
 .snapshot-flow {
   margin: 8px 0 16px;
   font-size: 13px;
+}
+
+/* Break group headers: full-width bar, centered, single-line */
+#breakSection tr.group-row td {
+  background: #f1f3f5 !important;
+  color: #4b5563 !important;
+
+  font-weight: 700 !important;
+  font-size: 11px !important;
+  padding: 4px 10px !important;
+
+  text-align: center !important;
+  white-space: nowrap !important;     /* prevent wrapping */
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+
+  border-top: 1px solid #e5e7eb !important;
+  border-bottom: 1px solid #e5e7eb !important;
+}
+
+/* Make sure the group header row truly spans the full width */
+#breakSection tr.group-row td[colspan] {
+  width: 100% !important;
 }
 
 
@@ -432,13 +454,18 @@
 
 	}
 
+/* Breaking row highlighted when Completed*/
+tr.completed td {
+  background: #d1fae5 !important; /* light green */
+}
+
 
     tr.completed {
       background: #ecfdf5;
     }
 
     tr.in-progress {
-      background: #fef3c7;
+      background: #c2d9ff;
     }
 
     .search-input {
@@ -798,6 +825,7 @@
   display: inline-block;
 }
 
+
 /* Color mapping */
 .cal-break { background: #82b8ff; }      /* Light Blue */
 .cal-loading { background: #00cc66; }    /* Green */
@@ -1024,6 +1052,7 @@
                 <th>MARK</th>
                 <th>Order ID</th>
                 <th>Bales</th>
+				<th>Date To Load</th>
                 <th>Location</th>
                 <th>Ready?</th>
                 <th>Status</th>
@@ -1192,7 +1221,7 @@
     <div class="prev-month-title" id="prevMonthTitle">Last Month Not Loaded</div>
     <div class="prev-month-count" id="prevMonthCount"></div>
   </div>
-
+<div id="calendarGrid" class="calendar-grid"></div>
   <div class="prev-month-table-scroll">
     <table class="prev-month-table">
       <thead>
@@ -1210,7 +1239,7 @@
 </div>
 
 
-    <div id="calendarGrid" class="calendar-grid"></div>
+    
   </div>
 </div>
 
@@ -1720,18 +1749,31 @@ function renderWarehouse() {
   }
 }
 
+function parseYMDLocal(ymd) {
+  if (!ymd || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return null;
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(y, m - 1, d); // local midnight
+}
+
 function isLateLoad(m) {
   if (!m?.dateToLoad) return false;
+
+  // Never late if already loaded
   if ((m.loadingStatus || '') === 'Loaded') return false;
+
+  const due = parseYMDLocal(m.dateToLoad);
+  if (!due) return false;
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const dt = new Date(m.dateToLoad);
-  if (isNaN(dt.getTime())) return false;
+  // days since due date
+  const diffDays = Math.floor((today - due) / 86400000);
 
-  return dt < today;
+  // 2-day grace: show late on the 3rd day after due date
+  return diffDays >= 3;
 }
+
 
 function getPrevMonthRange(year, monthIndex0) {
   // monthIndex0 is 0-11 (currentCalendarMonth)
@@ -1750,19 +1792,6 @@ function getPrevMonthRange(year, monthIndex0) {
   return { start, end, startStr: fmt(start), endStr: fmt(end) };
 }
 
-function isLateByDateStr(dateStr, loadingStatus) {
-  if (!dateStr) return false;
-  if ((loadingStatus || '') === 'Loaded') return false;
-
-  const today = new Date();
-  today.setHours(0,0,0,0);
-
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return false;
-  d.setHours(0,0,0,0);
-
-  return d < today;
-}
 
 function renderPrevMonthNotLoaded() {
   const body = document.getElementById('prevMonthNotLoadedBody');
@@ -3263,79 +3292,98 @@ function deleteMark(id) {
 
     // ===== RENDER: BREAK TABLE =====
     function renderBreakTable() {
-      const tbody = document.getElementById('breakTableBody');
-      if (!tbody) return;
+  const tbody = document.getElementById('breakTableBody');
+  if (!tbody) return;
 
-      const q = (document.getElementById('searchBreak')?.value || '').trim().toLowerCase();
+  const q = (document.getElementById('searchBreak')?.value || '').trim().toLowerCase();
+  const rows = [];
 
-      // Hide marks that are cleared AND completed/completed breaking
-      const filtered = marks
-        .filter(m => !(
-          m.cleared &&
-          (m.breakStatus === 'Completed' || m.breakStatus === 'Completed Breaking')
-        ))
-        .filter(m => {
-          if (!q) return true;
-          return (
-            (m.mark || '').toLowerCase().includes(q) ||
-            (m.orderId || '').toLowerCase().includes(q) ||
-            (m.location || '').toLowerCase().includes(q)
-          );
-        });
+  // Hide marks that are cleared AND completed/completed breaking
+  const filtered = marks
+    .filter(m => !(
+      m.cleared &&
+      (m.breakStatus === 'Completed' || m.breakStatus === 'Completed Breaking')
+    ))
+    .filter(m => {
+      if (!q) return true;
+      return (
+        (m.mark || '').toString().toLowerCase().includes(q) ||
+        (m.orderId || '').toString().toLowerCase().includes(q) ||
+        (m.location || '').toString().toLowerCase().includes(q)
+      );
+    });
 
-      // status ordering
-      const statusOrder = ['Ready', 'In Progress', 'Not Started', 'Completed', 'Completed Breaking'];
+  const statusOrder = ['Ready', 'In Progress', 'Not Started', 'Completed', 'Completed Breaking'];
 
-      filtered.sort((a, b) => {
-        const ai = statusOrder.indexOf(a.breakStatus || '');
-        const bi = statusOrder.indexOf(b.breakStatus || '');
-        return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+  statusOrder.forEach(status => {
+    const group = filtered
+      .filter(m => (m.breakStatus || 'Not Started') === status)
+      .slice()
+      .sort((a, b) => {
+        const aDate = a.dateToLoad || '9999-12-31';
+        const bDate = b.dateToLoad || '9999-12-31';
+        if (aDate === bDate) return (a.mark || '').localeCompare(b.mark || '');
+        return aDate.localeCompare(bDate);
       });
 
-      const rows = filtered.map(m => {
-        const rowClass =
-          m.breakStatus === 'Completed' || m.breakStatus === 'Completed Breaking'
-            ? 'completed'
-            : (m.breakStatus === 'In Progress' ? 'in-progress' : '');
+    if (!group.length) return;
 
-        return `
-          <tr class="${rowClass}">
-            <td><strong>${esc(m.mark || '')}</strong></td>
-            <td>${esc(m.orderId || '')}</td>
-            <td>${esc(m.baleCount ?? '')}</td>
-            <td>
-              <input type="text" value="${esc(m.location || '')}"
-                     onblur="updateMarkLocation('${m.id}', this.value)">
-            </td>
-            <td style="text-align:center;">
-              <input type="checkbox" ${m.readyToBreak ? 'checked' : ''}
-                     onchange="toggleReady('${m.id}', this.checked)">
-            </td>
-            <td>
-              <select onchange="updateMarkField('${m.id}', 'breakStatus', this.value)">
-                <option value="Not Started" ${m.breakStatus === 'Not Started' ? 'selected' : ''}>Not Started</option>
-                <option value="Ready" ${m.breakStatus === 'Ready' ? 'selected' : ''}>Ready</option>
-                <option value="In Progress" ${m.breakStatus === 'In Progress' ? 'selected' : ''}>In Progress</option>
-                <option value="Completed" ${m.breakStatus === 'Completed' ? 'selected' : ''}>Completed</option>
-                <option value="Completed Breaking" ${m.breakStatus === 'Completed Breaking' ? 'selected' : ''}>Completed Breaking</option>
-              </select>
-            </td>
-            <td style="white-space:nowrap;">
-              <button class="btn-sm" onclick="openBreakDrawer('${m.id}')">Edit</button>
-              <button class="btn-sm btn-outline" onclick="event.stopPropagation(); markAsCleared('${m.id}')">
-                ${m.cleared ? 'Unclear' : 'Clear'}
-              </button>
-              <button class="btn-sm" onclick="event.stopPropagation(); printPinkCard('${m.id}')">Pink Tag</button>
-            </td>
-          </tr>
-        `;
-      });
+    rows.push(`
+      <tr class="group-row">
+        <td colspan="8"><strong>${esc(status)}</strong> (${group.length})</td>
+      </tr>
+    `);
 
-      tbody.innerHTML =
-        rows.join('') || '<tr><td colspan="7" class="muted">No marks yet.</td></tr>';
+    group.forEach(m => {
+      const trClass =
+        (m.breakStatus === 'Completed' || m.breakStatus === 'Completed Breaking')
+          ? 'completed'
+          : (m.breakStatus === 'In Progress' ? 'in-progress' : '');
 
-      updateBadges();
-    }
+      rows.push(`
+        <tr class="${trClass}">
+          <td><strong>${esc(m.mark || '')}</strong></td>
+          <td>${esc(m.orderId || '')}</td>
+          <td>
+            <input type="text" value="${esc(m.location || '')}"
+                   onblur="updateMarkLocation('${m.id}', this.value)">
+          </td>
+          <td>
+            <input type="date" value="${esc(m.dateToLoad || '')}"
+                   onblur="updateMarkField('${m.id}', 'dateToLoad', this.value)">
+          </td>
+          <td>${esc(m.baleCount ?? '')}</td>
+          <td style="text-align:center;">
+            <input type="checkbox" ${m.readyToBreak ? 'checked' : ''}
+                   onchange="toggleReady('${m.id}', this.checked)">
+          </td>
+          <td>
+            <select onchange="updateMarkField('${m.id}', 'breakStatus', this.value)">
+              <option value="Not Started" ${m.breakStatus === 'Not Started' ? 'selected' : ''}>Not Started</option>
+              <option value="Ready" ${m.breakStatus === 'Ready' ? 'selected' : ''}>Ready</option>
+              <option value="In Progress" ${m.breakStatus === 'In Progress' ? 'selected' : ''}>In Progress</option>
+              <option value="Completed" ${m.breakStatus === 'Completed' ? 'selected' : ''}>Completed</option>
+              <option value="Completed Breaking" ${m.breakStatus === 'Completed Breaking' ? 'selected' : ''}>Completed Breaking</option>
+            </select>
+          </td>
+          <td style="white-space:nowrap;">
+            <button class="btn-sm" onclick="openBreakDrawer('${m.id}')">Edit</button>
+            <button class="btn-sm btn-outline" onclick="event.stopPropagation(); markAsCleared('${m.id}')">
+              ${m.cleared ? 'Unclear' : 'Clear'}
+            </button>
+            <button class="btn-sm" onclick="event.stopPropagation(); printPinkCard('${m.id}')">Pink Tag</button>
+          </td>
+        </tr>
+      `);
+    });
+  });
+
+  tbody.innerHTML =
+    rows.join('') || '<tr><td colspan="8" class="muted">No marks yet.</td></tr>';
+
+  updateBadges();
+}
+
 
 function updateMarkLocation(id, newLocation) {
   const mark = marks.find(m => m.id === id);
@@ -3677,7 +3725,16 @@ function getCalendarTooltip(m) {
     html += `<div class="calendar-cell"></div>`;
   }
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  function getLocalTodayStr() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+const todayStr = getLocalTodayStr();
+
 
   for (let day = 1; day <= daysInMonth; day++) {
     const dateStr = fmtDate(currentCalendarYear, currentCalendarMonth, day);
