@@ -471,6 +471,15 @@
 tr.completed td {
   background: #d1fae5 !important; /* light green */
 }
+/* Break table: NOT READY (unchecked) */
+#breakSection tr.not-started td {
+  background: #fee2e2 !important; /* light red */
+}
+
+/* Keep text readable */
+#breakSection tr.not-started td {
+  color: #7f1d1d;
+}
 
 
     tr.completed {
@@ -479,6 +488,10 @@ tr.completed td {
 
     tr.in-progress {
       background: #c2d9ff;
+    }
+	
+	tr.not started {
+      background: #fcbdbd;
     }
 
     .search-input {
@@ -1066,8 +1079,8 @@ tr.completed td {
                 <th>Order ID</th>
                 <th>Bales</th>
 				<th>Date To Load</th>
+				<th>Ready?</th>
                 <th>Location</th>
-                <th>Ready?</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
@@ -3350,28 +3363,35 @@ function deleteMark(id) {
     `);
 
     group.forEach(m => {
-      const trClass =
-        (m.breakStatus === 'Completed' || m.breakStatus === 'Completed Breaking')
-          ? 'completed'
-          : (m.breakStatus === 'In Progress' ? 'in-progress' : '');
+      let trClass = '';
+
+if (m.breakStatus === 'Completed' || m.breakStatus === 'Completed Breaking') {
+  trClass = 'completed';
+} else if (m.breakStatus === 'In Progress') {
+  trClass = 'in-progress';
+} else if (!m.readyToBreak) {
+  trClass = 'not-started';
+}
+
 
       rows.push(`
         <tr class="${trClass}">
           <td><strong>${esc(m.mark || '')}</strong></td>
           <td>${esc(m.orderId || '')}</td>
-          <td>
-            <input type="text" value="${esc(m.location || '')}"
-                   onblur="updateMarkLocation('${m.id}', this.value)">
-          </td>
+          <td>${esc(m.baleCount ?? '')}</td>
           <td>
             <input type="date" value="${esc(m.dateToLoad || '')}"
                    onblur="updateMarkField('${m.id}', 'dateToLoad', this.value)">
           </td>
-          <td>${esc(m.baleCount ?? '')}</td>
-          <td style="text-align:center;">
+		  <td style="text-align:center;">
             <input type="checkbox" ${m.readyToBreak ? 'checked' : ''}
                    onchange="toggleReady('${m.id}', this.checked)">
           </td>
+          <td>
+            <input type="text" value="${esc(m.location || '')}"
+                   onblur="updateMarkLocation('${m.id}', this.value)">
+          </td>
+          
           <td>
             <select onchange="updateMarkField('${m.id}', 'breakStatus', this.value)">
               <option value="Not Started" ${m.breakStatus === 'Not Started' ? 'selected' : ''}>Not Started</option>
