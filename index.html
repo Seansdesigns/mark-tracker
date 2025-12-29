@@ -180,6 +180,17 @@
   border-radius: 6px !important;
   width: 100%;
 }
+/* === FIX: don't flex the Actions cell on group header rows === */
+#breakSection tr.group-row td:last-child {
+  display: table-cell !important;
+  white-space: nowrap !important;
+}
+
+/* === FIX: group row spans and fills full width === */
+#breakSection tr.group-row td[colspan]{
+  display: table-cell !important;
+  width: 100% !important;
+}
 
 	
 .snapshot-kpis {
@@ -228,6 +239,8 @@
 #breakSection tr.group-row td[colspan] {
   width: 100% !important;
 }
+
+
 
 
     /* ===============================================
@@ -1216,12 +1229,12 @@ tr.completed td {
       <button class="btn-outline btn-sm" onclick="nextMonth()">→</button>
     </div>
 
+
+<div id="calendarGrid" class="calendar-grid"></div>
 <div id="prevMonthNotLoadedWrap" class="prev-month-wrap">
   <div class="prev-month-head">
     <div class="prev-month-title" id="prevMonthTitle">Last Month Not Loaded</div>
     <div class="prev-month-count" id="prevMonthCount"></div>
-  </div>
-<div id="calendarGrid" class="calendar-grid"></div>
   <div class="prev-month-table-scroll">
     <table class="prev-month-table">
       <thead>
@@ -1235,6 +1248,8 @@ tr.completed td {
       </thead>
       <tbody id="prevMonthNotLoadedBody"></tbody>
     </table>
+  </div>
+  
   </div>
 </div>
 
@@ -1822,7 +1837,7 @@ function renderPrevMonthNotLoaded() {
   }
 
   body.innerHTML = list.map(m => {
-    const late = isLateByDateStr(m.dateToLoad, m.loadingStatus);
+    const late = isLateLoad(m);
     return `
       <tr>
         <td><strong>${esc(m.mark || '')}</strong>${late ? ' <span class="late-badge">LATE</span>' : ''}</td>
