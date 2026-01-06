@@ -1046,13 +1046,20 @@ tr.completed td {
           </div>
         </div>
         <div>
-          <div class="search-row">
-            <input
-              id="searchAllMarks"
-              class="search-input"
-              placeholder="Search mark, order, location..."
-              oninput="renderAllMarks()"
-            />
+         <div class="search-row">
+            <div style="display:flex; gap:8px; align-items:center; width:100%;">
+              <input
+                id="searchAllMarks"
+                class="search-input"
+                placeholder="Search marks..."
+                oninput="renderAllMarks()"
+                style="flex:1;"
+              />
+              <button class="btn-outline btn-sm" type="button"
+                onclick="openQrScanner('searchAllMarks', renderAllMarks)">
+                📷 Scan
+              </button>
+            </div>
           </div>
           <div id="allMarksList"></div>
         </div>
@@ -1678,23 +1685,34 @@ function openMarkDetails(mark) {
   const daysWaiting = getDaysWaiting(mark);
 
   content.innerHTML = `
-    <h3>${mark.mark}</h3>
-    <p>
+    <h3 style="margin-top:0;">${mark.mark || ''}</h3>
+
+    <div style="font-size:13px; line-height:1.45;">
       <strong>Order:</strong> ${mark.orderId || ''}<br>
-      <strong>Bales:</strong> ${mark.baleCount}<br>
-      <strong>Location:</strong> ${mark.location}<br>
-      <strong>Break Status:</strong> ${mark.breakStatus}<br>
+      <strong>Bales:</strong> ${mark.baleCount ?? ''}<br>
+      <strong>Location:</strong> ${mark.location || '—'}<br><br>
+
+      <strong>Break Status:</strong> ${mark.breakStatus || '—'}<br>
+      <strong>Breakers:</strong> ${mark.breakers || '—'}<br>
+      <strong>Hauler:</strong> ${mark.hauler || '—'}<br>
+      <strong>Date Completed:</strong> ${mark.dateCompleted || '—'}<br><br>
+
       <strong>Loading Status:</strong> ${mark.loadingStatus || 'Not Loaded'}<br>
-      <strong>Date Completed:</strong> ${mark.dateCompleted || ''}<br>
-      <strong>Date to Load:</strong> ${mark.dateToLoad || ''}<br>
-      <strong>Days Waiting:</strong> ${
-        daysWaiting !== null ? daysWaiting + ' days' : '—'
-      }
-    </p>
+      <strong>Loader:</strong> ${mark.loadedBy || '—'}<br>
+      <strong>Date Loaded:</strong> ${mark.dateLoaded || '—'}<br>
+      <strong>Container Type:</strong> ${mark.containerType || '—'}<br>
+      <strong>Vehicle ID:</strong> ${mark.vehicleId || '—'}<br>
+      <strong>Truckline:</strong> ${mark.truckline || '—'}<br>
+      <strong>Driver:</strong> ${mark.driverName || '—'} ${mark.driverPhone ? `(${mark.driverPhone})` : ''}<br><br>
+
+      <strong>Date to Load:</strong> ${mark.dateToLoad || '—'}<br>
+      <strong>Days Waiting:</strong> ${daysWaiting !== null ? daysWaiting + ' days' : '—'}
+    </div>
   `;
 
   overlay.classList.remove('hidden');
 }
+
 
 
 function closeMarkDetails() {
@@ -3286,61 +3304,81 @@ function deleteMark(id) {
 
     // ===== RENDER: ALL MARKS =====
     function renderAllMarks() {
-      const container = document.getElementById('allMarksList');
-      const q = (document.getElementById('searchAllMarks').value || '').trim().toLowerCase();
+  const listEl = document.getElementById('allMarksList');
+  const inputEl = document.getElementById('searchAllMarks');
+  if (!listEl) return;
 
-      const filtered = marks
-        .slice()
-        .sort((a, b) => {
-          return (b.createdAt || '').localeCompare(a.createdAt || '');
-        })
-        .filter(m => {
-          if (!q) return true;
-          const text = [
-            m.mark,
-            m.orderId,
-            m.location || '',
-            m.breakStatus || '',
-            m.loadingStatus || ''
-          ].join(' ').toLowerCase();
-          return text.includes(q);
-        });
+  const q = String(inputEl?.value || '').trim().toLowerCase();
 
-      if (!filtered.length) {
-        container.innerHTML =
-          '<div class="muted" style="padding:8px;">No marks yet.</div>';
-        return;
-      }
+  const filtered = (marks || [])
+    .filter(m => {
+      if (!q) return true;
 
-      container.innerHTML = filtered
-        .map(m => {
-          const breakBadge = m.breakStatus || 'Not Started';
-          const loadingBadge = m.loadingStatus || 'Not Loaded';
-          const ready = m.readyToBreak ? 'Yes' : 'No';
+      const hay = [
+        m.mark,
+        m.orderId,
+        m.location,
+        m.breakers,
+        m.hauler,
+        m.loadedBy
+      ]
+        .filter(Boolean)
+        .map(v => String(v).toLowerCase())
+        .join(' ');
 
-          return `
-          <div class="card">
-            <div class="card-header-row">
-              <div>
-                <div><strong>${m.mark}</strong> · Order ${m.orderId}</div>
-                <div class="muted" style="font-size:12px;">
-                  Bales: ${m.baleCount} · Location: ${m.location || 'N/A'}
-                </div>
+      return hay.includes(q);
+    })
+    .sort((a, b) => String(a.mark || '').localeCompare(String(b.mark || '')));
+
+  if (!filtered.length) {
+    listEl.innerHTML = `<p class="muted">No marks match that search.</p>`;
+    return;
+  }
+
+  listEl.innerHTML = filtered
+    .map(m => {
+      const breakStatus = m.breakStatus || '—';
+      const loadStatus = m.loadingStatus || 'Not Loaded';
+
+      const breakers = (m.breakers || '').trim();
+      const hauler = (m.hauler || '').trim();
+      const loader = (m.loadedBy || '').trim();
+
+      const peopleLine = [
+        breakers ? `🏗️ ${breakers}` : '',
+        hauler ? `🚚 ${hauler}` : '',
+        loader ? `📦 ${loader}` : ''
+      ].filter(Boolean).join('   ');
+
+      return `
+        <div class="card" data-markid="${m.id}" style="margin:8px 0; cursor:pointer;">
+          <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+            <div>
+              <div style="font-weight:800; font-size:14px;">${m.mark || ''}</div>
+              <div class="muted" style="font-size:12px;">
+                Order: ${m.orderId || ''} • Bales: ${m.baleCount ?? ''} • Loc: ${m.location || '—'}
               </div>
-              <div class="badge-row">
-                <span class="badge">${breakBadge}</span>
-                <span class="badge">${loadingBadge}</span>
-              </div>
+              ${peopleLine ? `<div class="muted" style="font-size:12px; margin-top:4px;">${peopleLine}</div>` : ``}
             </div>
-            <div class="card-row">
-              <span>Ready to Break: <strong>${ready}</strong></span>
-              <span>Date to Load: <strong>${m.dateToLoad || 'N/A'}</strong></span>
+            <div style="text-align:right; white-space:nowrap;">
+              <div style="font-size:12px;"><strong>Break:</strong> ${breakStatus}</div>
+              <div style="font-size:12px;"><strong>Load:</strong> ${loadStatus}</div>
             </div>
           </div>
-        `;
-        })
-        .join('');
-    }
+        </div>
+      `;
+    })
+    .join('');
+
+  // click card -> open details popup
+  listEl.querySelectorAll('[data-markid]').forEach(el => {
+    el.addEventListener('click', () => {
+      const id = el.getAttribute('data-markid');
+      const m = (marks || []).find(x => String(x.id) === String(id));
+      if (m) openMarkDetails(m);
+    });
+  });
+}
 
     // ===== RENDER: BREAK TABLE =====
     function renderBreakTable() {
@@ -4334,9 +4372,3 @@ renderPrevMonthNotLoaded();
 
 </body>
 </html>
-
-
-
-
-
-
