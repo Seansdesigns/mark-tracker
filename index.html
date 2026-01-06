@@ -1062,18 +1062,18 @@ tr.completed td {
     <!-- ========== BREAK / BUILD SECTION ========== -->
     <div id="breakSection" class="section">
       <div class="card">
-        <<div class="search-row">
-  <h3 style="margin:0;font-size:14px;">Loading</h3>
+        <div class="search-row">
+  <h3 style="margin:0;font-size:14px;">Break / Build</h3>
 
   <div style="display:flex; gap:8px; align-items:center;">
     <input
-      id="searchLoading"
+      id="searchBreak"
       class="search-input"
       placeholder="Search..."
-      oninput="renderLoadingTable()"
+      oninput="renderBreakTable()"
     />
     <button class="btn-outline btn-sm" type="button"
-      onclick="openQrScanner('searchLoading', renderLoadingTable)">
+      onclick="openQrScanner('searchBreak', renderBreakTable)">
       📷 Scan
     </button>
   </div>
@@ -4334,6 +4334,7 @@ renderPrevMonthNotLoaded();
 
 </body>
 </html>
+
 
 
 
