@@ -1062,15 +1062,23 @@ tr.completed td {
     <!-- ========== BREAK / BUILD SECTION ========== -->
     <div id="breakSection" class="section">
       <div class="card">
-        <div class="search-row">
-          <h3 style="margin:0;font-size:14px;">Break / Build</h3>
-          <input
-            id="searchBreak"
-            class="search-input"
-            placeholder="Search..."
-            oninput="renderBreakTable()"
-          />
-        </div>
+        <<div class="search-row">
+  <h3 style="margin:0;font-size:14px;">Loading</h3>
+
+  <div style="display:flex; gap:8px; align-items:center;">
+    <input
+      id="searchLoading"
+      class="search-input"
+      placeholder="Search..."
+      oninput="renderLoadingTable()"
+    />
+    <button class="btn-outline btn-sm" type="button"
+      onclick="openQrScanner('searchLoading', renderLoadingTable)">
+      📷 Scan
+    </button>
+  </div>
+</div>
+
         <div class="table-wrap">
           <table>
             <thead>
@@ -1095,14 +1103,22 @@ tr.completed td {
     <div id="loadingSection" class="section">
       <div class="card">
         <div class="search-row">
-          <h3 style="margin:0;font-size:14px;">Loading</h3>
-          <input
-            id="searchLoading"
-            class="search-input"
-            placeholder="Search..."
-            oninput="renderLoadingTable()"
-          />
-        </div>
+  <h3 style="margin:0;font-size:14px;">Loading</h3>
+
+  <div style="display:flex; gap:8px; align-items:center;">
+    <input
+      id="searchLoading"
+      class="search-input"
+      placeholder="Search..."
+      oninput="renderLoadingTable()"
+    />
+    <button class="btn-outline btn-sm" type="button"
+      onclick="openQrScanner('searchLoading', renderLoadingTable)">
+      📷 Scan
+    </button>
+  </div>
+</div>
+
         <div class="table-wrap">
           <table>
             <thead>
@@ -1126,14 +1142,22 @@ tr.completed td {
     <div id="completedSection" class="section">
       <div class="card">
         <div class="search-row">
-          <h3 style="margin:0;font-size:14px;">Completed Loads</h3>
-          <input
-            id="searchCompleted"
-            class="search-input"
-            placeholder="Search..."
-            oninput="renderCompletedTable()"
-          />
-        </div>
+  <h3 style="margin:0;font-size:14px;">Completed Loads</h3>
+
+  <div style="display:flex; gap:8px; align-items:center;">
+    <input
+      id="searchCompleted"
+      class="search-input"
+      placeholder="Search..."
+      oninput="renderCompletedTable()"
+    />
+    <button class="btn-outline btn-sm" type="button"
+      onclick="openQrScanner('searchCompleted', renderCompletedTable)">
+      📷 Scan
+    </button>
+  </div>
+</div>
+
         <div class="table-wrap">
           <table>
             <thead>
@@ -3438,6 +3462,140 @@ function updateMarkLocation(id, newLocation) {
   renderCalendar();
 }
 
+// ========== QR SCANNER (BarcodeDetector) ==========
+let _qrStream = null;
+let _qrRaf = null;
+let _qrTargetInputId = null;
+let _qrAfterFn = null;
+
+function _setQrStatus(msg) {
+  const el = document.getElementById('qrStatus');
+  if (el) el.textContent = msg;
+}
+
+function extractMarkFromQr(raw) {
+  const text = String(raw || '').trim();
+
+  // If QR is a URL, try to pull mark/order style params or last path token
+  try {
+    if (/^https?:\/\//i.test(text)) {
+      const u = new URL(text);
+      const qMark =
+        u.searchParams.get('mark') ||
+        u.searchParams.get('MARK') ||
+        u.searchParams.get('Mark');
+      if (qMark) return qMark.trim().toUpperCase();
+
+      // fallback: last path segment
+      const segs = u.pathname.split('/').filter(Boolean);
+      if (segs.length) return segs[segs.length - 1].trim().toUpperCase();
+    }
+  } catch (_) {}
+
+  // If it looks like "MARK: ABCD" or "MARK=ABCD"
+  const m = text.match(/(?:^|[\s?&])mark[:=]\s*([A-Za-z0-9_-]+)/i);
+  if (m?.[1]) return m[1].trim().toUpperCase();
+
+  // Otherwise just return raw
+  return text.toUpperCase();
+}
+
+async function openQrScanner(targetInputId, afterFn) {
+  _qrTargetInputId = targetInputId;
+  _qrAfterFn = afterFn;
+
+  const overlay = document.getElementById('qrScanOverlay');
+  const video = document.getElementById('qrVideo');
+
+  if (!overlay || !video) {
+    alert('QR scanner overlay is missing in HTML.');
+    return;
+  }
+
+  // BarcodeDetector support check
+  if (!('BarcodeDetector' in window)) {
+    alert('QR scanning not supported on this browser/device. Try Chrome/Edge on mobile, or use manual search.');
+    return;
+  }
+
+  overlay.classList.remove('hidden');
+  _setQrStatus('Starting camera…');
+
+  try {
+    // Back camera preferred
+    _qrStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' } },
+      audio: false
+    });
+
+    video.srcObject = _qrStream;
+    await video.play();
+
+    const detector = new BarcodeDetector({ formats: ['qr_code'] });
+
+    const scanLoop = async () => {
+      if (!video || video.readyState < 2) {
+        _qrRaf = requestAnimationFrame(scanLoop);
+        return;
+      }
+
+      try {
+        const codes = await detector.detect(video);
+        if (codes && codes.length) {
+          const raw = codes[0].rawValue || '';
+          const mark = extractMarkFromQr(raw);
+
+          const input = document.getElementById(_qrTargetInputId);
+          if (input) input.value = mark;
+
+          _setQrStatus(`Scanned: ${mark}`);
+
+          // run render
+          if (typeof _qrAfterFn === 'function') _qrAfterFn();
+
+          // stop camera after success
+          closeQrScanner();
+          return;
+        }
+      } catch (e) {
+        // Keep trying; some devices throw occasionally while focusing
+      }
+
+      _qrRaf = requestAnimationFrame(scanLoop);
+    };
+
+    _qrRaf = requestAnimationFrame(scanLoop);
+    _setQrStatus('Point camera at the QR code…');
+  } catch (err) {
+    console.error(err);
+    _setQrStatus('Camera permission denied or camera unavailable.');
+  }
+}
+
+function closeQrScanner() {
+  const overlay = document.getElementById('qrScanOverlay');
+  const video = document.getElementById('qrVideo');
+
+  if (_qrRaf) {
+    cancelAnimationFrame(_qrRaf);
+    _qrRaf = null;
+  }
+
+  if (video) {
+    try { video.pause(); } catch (_) {}
+    video.srcObject = null;
+  }
+
+  if (_qrStream) {
+    _qrStream.getTracks().forEach(t => t.stop());
+    _qrStream = null;
+  }
+
+  if (overlay) overlay.classList.add('hidden');
+
+  _qrTargetInputId = null;
+  _qrAfterFn = null;
+}
 
 
 
@@ -4155,10 +4313,27 @@ renderPrevMonthNotLoaded();
   </div>
 </div>
 
+<!-- ========== QR SCANNER OVERLAY ========== -->
+<div id="qrScanOverlay" class="overlay hidden">
+  <div class="mark-details-card" style="width:420px; max-width:95vw;">
+    <button class="close-btn" onclick="closeQrScanner()">✕</button>
+    <h3 style="margin:0 0 8px;">Scan QR</h3>
+
+    <video id="qrVideo" playsinline style="width:100%; border-radius:8px; background:#000;"></video>
+
+    <div class="muted" id="qrStatus" style="margin-top:8px; font-size:12px;">
+      Point camera at the QR code…
+    </div>
+
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:10px;">
+      <button class="btn-outline btn-sm" onclick="closeQrScanner()">Close</button>
+    </div>
+  </div>
+</div>
+
 
 </body>
 </html>
-
 
 
 
