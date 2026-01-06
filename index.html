@@ -3410,17 +3410,18 @@ function deleteMark(id) {
     .filter(m => (m.breakStatus || 'Not Started') === status)
     .slice()
     .sort((a, b) => {
-      // Order ID numeric (smallest → biggest)
-      const oa = parseInt(String(a.orderId || '').replace(/\D+/g, ''), 10) || 0;
-      const ob = parseInt(String(b.orderId || '').replace(/\D+/g, ''), 10) || 0;
-
-      if (oa !== ob) return oa - ob;
+      
 
       // Tie-breakers (keeps things stable)
       const aDate = a.dateToLoad || '9999-12-31';
       const bDate = b.dateToLoad || '9999-12-31';
       if (aDate !== bDate) return aDate.localeCompare(bDate);
 
+	// Order ID numeric (smallest → biggest)
+      const oa = parseInt(String(a.orderId || '').replace(/\D+/g, ''), 10) || 0;
+      const ob = parseInt(String(b.orderId || '').replace(/\D+/g, ''), 10) || 0;
+
+      if (oa !== ob) return oa - ob;
       return String(a.mark || '').localeCompare(String(b.mark || ''));
     });
 
@@ -4381,3 +4382,4 @@ renderPrevMonthNotLoaded();
 
 </body>
 </html>
+
