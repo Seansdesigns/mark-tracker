@@ -534,6 +534,10 @@ tr.completed td {
 }
 .prev-month-title{ font-weight: 800; }
 .prev-month-count{ color:#6b7280; font-size:12px; }
+.outside-calendar-right{ display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
+.outside-filters{ display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end; font-size:12px; color:#374151; }
+.outside-filters label{ display:flex; align-items:center; gap:6px; user-select:none; cursor:pointer; }
+.outside-filters input{ transform: translateY(0.5px); }
 
 .prev-month-table-scroll{ overflow:auto; max-height: 220px; }
 .prev-month-table{ width:100%; border-collapse: collapse; font-size: 12px; }
@@ -963,6 +967,24 @@ tr.completed td {
 @media print {
   .drawer-overlay, .drawer-panel { display: none !important; }
 }
+
+/* =========================
+   PRINT: Warehouse Checklist
+   ========================= */
+.print-only{ display:none; }
+body.printing-audit .app-shell{ display:none; }
+body.printing-audit .print-only{ display:block; padding: 18px; background:#fff; color:#000; }
+@media print {
+  body.printing-audit .app-shell{ display:none !important; }
+  body.printing-audit .print-only{ display:block !important; }
+}
+.print-audit-title{ font-size:18px; font-weight:800; margin:0 0 6px; }
+.print-audit-sub{ font-size:12px; margin:0 0 12px; color:#111; }
+.print-audit-table{ width:100%; border-collapse: collapse; font-size: 12px; }
+.print-audit-table th, .print-audit-table td{ border:1px solid #000; padding:6px; vertical-align: top; }
+.print-check{ width:22px; text-align:center; }
+.print-box{ display:inline-block; width:14px; height:14px; border:2px solid #000; }
+.print-zone{ font-size:13px; font-weight:800; margin:14px 0 6px; }
 </style>
 </head>
 <body>
@@ -1057,7 +1079,7 @@ tr.completed td {
               />
               <button class="btn-outline btn-sm" type="button"
                 onclick="openQrScanner('searchAllMarks', renderAllMarks)">
-                📷 Scan
+                📱 Scan
               </button>
             </div>
           </div>
@@ -1081,7 +1103,7 @@ tr.completed td {
     />
     <button class="btn-outline btn-sm" type="button"
       onclick="openQrScanner('searchBreak', renderBreakTable)">
-      📷 Scan
+      📱 Scan
     </button>
   </div>
 </div>
@@ -1121,7 +1143,7 @@ tr.completed td {
     />
     <button class="btn-outline btn-sm" type="button"
       onclick="openQrScanner('searchLoading', renderLoadingTable)">
-      📷 Scan
+      📱 Scan
     </button>
   </div>
 </div>
@@ -1160,7 +1182,7 @@ tr.completed td {
     />
     <button class="btn-outline btn-sm" type="button"
       onclick="openQrScanner('searchCompleted', renderCompletedTable)">
-      📷 Scan
+      📱 Scan
     </button>
   </div>
 </div>
@@ -1201,6 +1223,12 @@ tr.completed td {
       </button>
       <button id="whViewCompact" onclick="setWarehouseView('compact')">
         Compact List
+      </button>
+    </div>
+
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin: 6px 0 10px;">
+      <button class="btn-outline btn-sm" type="button" onclick="printWarehouseChecklist()">
+        🧾 Print Warehouse Checklist
       </button>
     </div>
 
@@ -1275,10 +1303,20 @@ tr.completed td {
 
 
 <div id="calendarGrid" class="calendar-grid"></div>
-<div id="prevMonthNotLoadedWrap" class="prev-month-wrap">
+<div id="outsideCalendarWrap" class="prev-month-wrap">
   <div class="prev-month-head">
-    <div class="prev-month-title" id="prevMonthTitle">Last Month Not Loaded</div>
-    <div class="prev-month-count" id="prevMonthCount"></div>
+    <div class="prev-month-title" id="outsideCalendarTitle">Outside Calendar (Past Due + Upcoming)</div>
+
+    <div class="outside-calendar-right">
+      <div class="prev-month-count" id="outsideCalendarCount"></div>
+      <div class="outside-filters" id="outsideCalendarFilters">
+        <label><input type="checkbox" id="outsideFilterPast" checked> Past</label>
+        <label><input type="checkbox" id="outsideFilterUpcoming" checked> Upcoming</label>
+        <label><input type="checkbox" id="outsideFilterNoDate" checked> No Date</label>
+      </div>
+    </div>
+  </div>
+
   <div class="prev-month-table-scroll">
     <table class="prev-month-table">
       <thead>
@@ -1288,15 +1326,13 @@ tr.completed td {
           <th>Bales</th>
           <th>Location</th>
           <th>Date to Load</th>
+          <th>Status</th>
         </tr>
       </thead>
-      <tbody id="prevMonthNotLoadedBody"></tbody>
+      <tbody id="outsideCalendarBody"></tbody>
     </table>
   </div>
-  
-  </div>
 </div>
-
 
     
   </div>
@@ -1886,12 +1922,12 @@ function renderPrevMonthNotLoaded() {
 
   countEl.textContent = list.length ? `${list.length} mark(s)` : 'None 🎉';
 
-  if (!list.length) {
+  if (!shown.length) {
     body.innerHTML = `<tr><td colspan="5" class="muted">No remaining marks from last month.</td></tr>`;
     return;
   }
 
-  body.innerHTML = list.map(m => {
+  body.innerHTML = shown.map(m => {
     const late = isLateLoad(m);
     return `
       <tr>
@@ -1905,6 +1941,138 @@ function renderPrevMonthNotLoaded() {
   }).join('');
 }
 
+
+
+function getViewedMonthRange(year, monthIndex0) {
+  // monthIndex0 is 0-11 (currentCalendarMonth)
+  const start = new Date(year, monthIndex0, 1);
+  const end = new Date(year, monthIndex0 + 1, 0); // last day of viewed month
+  start.setHours(0,0,0,0);
+  end.setHours(0,0,0,0);
+
+  const fmt = d => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,'0');
+    const da = String(d.getDate()).padStart(2,'0');
+    return `${y}-${m}-${da}`;
+  };
+  return { start, end, startStr: fmt(start), endStr: fmt(end) };
+}
+
+const outsideCalendarFilterState = { past: true, upcoming: true, noDate: true };
+
+function initOutsideCalendarFilters() {
+  const wrap = document.getElementById('outsideCalendarFilters');
+  if (!wrap) return;
+
+  const pastEl = document.getElementById('outsideFilterPast');
+  const upEl = document.getElementById('outsideFilterUpcoming');
+  const ndEl = document.getElementById('outsideFilterNoDate');
+
+  const sync = () => {
+    outsideCalendarFilterState.past = !!(pastEl && pastEl.checked);
+    outsideCalendarFilterState.upcoming = !!(upEl && upEl.checked);
+    outsideCalendarFilterState.noDate = !!(ndEl && ndEl.checked);
+    renderOutsideCalendarList();
+  };
+
+  [pastEl, upEl, ndEl].forEach(el => {
+    if (!el) return;
+    el.addEventListener('change', sync);
+  });
+
+  // initial sync (in case markup defaults change)
+  sync();
+}
+
+function renderOutsideCalendarList() {
+  const body = document.getElementById('outsideCalendarBody');
+  const titleEl = document.getElementById('outsideCalendarTitle');
+  const countEl = document.getElementById('outsideCalendarCount');
+  const wrap = document.getElementById('outsideCalendarWrap');
+  if (!body || !titleEl || !countEl || !wrap) return;
+
+  const { startStr, endStr } = getViewedMonthRange(currentCalendarYear, currentCalendarMonth);
+  titleEl.textContent = `Outside ${monthNames[currentCalendarMonth]} ${currentCalendarYear}`;
+
+  const notLoaded = m => (m.loadingStatus || 'Not Loaded') !== 'Loaded';
+
+  const list = marks
+    .filter(m => {
+      if (!notLoaded(m)) return false;
+      const dt = (m.dateToLoad || '');
+      // show: past (before month), future (after month), or no date
+      if (!dt) return true;
+      return dt < startStr || dt > endStr;
+    })
+    .slice()
+    .sort((a,b) => {
+      const aDt = (a.dateToLoad || '9999-12-31');
+      const bDt = (b.dateToLoad || '9999-12-31');
+      if (aDt !== bDt) return aDt.localeCompare(bDt);
+      return (a.mark || '').localeCompare(b.mark || '');
+    });
+
+  const totals = {
+    past: list.filter(m => (m.dateToLoad || '') && (m.dateToLoad < startStr)).length,
+    upcoming: list.filter(m => (m.dateToLoad || '') && (m.dateToLoad > endStr)).length,
+    noDate: list.filter(m => !(m.dateToLoad || '')).length
+  };
+
+  const shown = list.filter(m => {
+    const dt = (m.dateToLoad || '');
+    if (!dt) return outsideCalendarFilterState.noDate;
+    if (dt < startStr) return outsideCalendarFilterState.past;
+    if (dt > endStr) return outsideCalendarFilterState.upcoming;
+    return true;
+  });
+
+  const shownCounts = {
+    past: shown.filter(m => (m.dateToLoad || '') && (m.dateToLoad < startStr)).length,
+    upcoming: shown.filter(m => (m.dateToLoad || '') && (m.dateToLoad > endStr)).length,
+    noDate: shown.filter(m => !(m.dateToLoad || '')).length
+  };
+
+  const prefix = (shown.length === list.length)
+    ? `${shown.length} mark(s)`
+    : `${shown.length} shown (of ${list.length})`;
+
+  countEl.textContent = list.length
+    ? `${prefix} • Past ${shownCounts.past}/${totals.past} • Upcoming ${shownCounts.upcoming}/${totals.upcoming} • No Date ${shownCounts.noDate}/${totals.noDate}`
+    : 'None 🎉';
+
+if (!list.length) {
+    body.innerHTML = `<tr><td colspan="6" class="muted">No marks match the current filters.</td></tr>`;
+    return;
+  }
+
+  body.innerHTML = shown.map(m => {
+    const dt = (m.dateToLoad || '');
+    const isPast = dt && dt < startStr;
+    const isFuture = dt && dt > endStr;
+    const isNoDate = !dt;
+    const late = isPast && isLateLoad(m);
+
+    const bucket = isNoDate
+      ? '<span class="badge" style="font-size:10px;">NO DATE</span>'
+      : (isPast
+          ? '<span class="badge" style="font-size:10px;border-color:#dc2626;color:#dc2626;">PAST</span>'
+          : '<span class="badge" style="font-size:10px;border-color:#2563eb;color:#2563eb;">UPCOMING</span>');
+
+    const statusText = getCalendarTooltip(m);
+
+    return `
+      <tr>
+        <td><strong>${esc(m.mark || '')}</strong>${late ? ' <span class="late-badge">LATE</span>' : ''}</td>
+        <td>${esc(m.orderId || '')}</td>
+        <td>${esc(m.baleCount ?? '')}</td>
+        <td>${esc(m.location || '')}</td>
+        <td>${dt ? esc(dt) : '<span class="muted">—</span>'} ${bucket}</td>
+        <td>${esc(statusText)}</td>
+      </tr>
+    `;
+  }).join('');
+}
 
 	// ====== REPORT HELPERS ======
 
@@ -2260,7 +2428,7 @@ function renderSnapshot() {
       </div>
 
       <div class="snapshot-kpis">
-        <div class="kpi"><strong>${total}</strong><span>Total in Shipping Shed</span></div>
+        <div class="kpi"><strong>${total}</strong><span>Total To Work</span></div>
         <div class="kpi"><strong>${breakCount}</strong><span>In Break</span></div>
         <div class="kpi"><strong>${loadingCount}</strong><span>In Loading</span></div>
         <div class="kpi"><strong>${lateCount}</strong><span>Late</span></div>
@@ -3410,18 +3578,19 @@ function deleteMark(id) {
     .filter(m => (m.breakStatus || 'Not Started') === status)
     .slice()
     .sort((a, b) => {
-      
+     
 
       // Tie-breakers (keeps things stable)
       const aDate = a.dateToLoad || '9999-12-31';
       const bDate = b.dateToLoad || '9999-12-31';
-      if (aDate !== bDate) return aDate.localeCompare(bDate);
-
-	// Order ID numeric (smallest → biggest)
+      if (aDate !== bDate) return aDate.localeCompare(bDate); 
+	  
+	  // Order ID numeric (smallest → biggest)
       const oa = parseInt(String(a.orderId || '').replace(/\D+/g, ''), 10) || 0;
       const ob = parseInt(String(b.orderId || '').replace(/\D+/g, ''), 10) || 0;
 
       if (oa !== ob) return oa - ob;
+
       return String(a.mark || '').localeCompare(String(b.mark || ''));
     });
 
@@ -3864,6 +4033,7 @@ function closeQrScanner() {
       currentCalendarYear = today.getFullYear();
       currentCalendarMonth = today.getMonth();
       renderCalendar();
+      initOutsideCalendarFilters();
     }
 	
 	function openCalendarModal(dateStr) {
@@ -4018,7 +4188,7 @@ const todayStr = getLocalTodayStr();
 
   grid.innerHTML = html;
 
-renderPrevMonthNotLoaded();
+renderOutsideCalendarList();
 
 
 }
@@ -4165,6 +4335,136 @@ renderPrevMonthNotLoaded();
 }, 60000); // refresh every 60 seconds
 
     });
+
+// =========================
+// Warehouse Checklist Print
+// =========================
+function getWarehouseChecklistSourceList() {
+  // Match what's shown on Warehouse page:
+  // - Has location
+  // - Break completed
+  // - Not loaded
+  // - Location parses to either an inside slot or an outside lane
+  return (marks || []).filter(m => {
+    if (!m || !m.location) return false;
+    if (m.breakStatus !== 'Completed' && m.breakStatus !== 'Completed Breaking') return false;
+    if (m.loadingStatus === 'Loaded') return false;
+    const inside = !!parseLocation(m.location);
+    const outside = !!parseOutLocation(m.location);
+    return inside || outside;
+  });
+}
+
+function classifyChecklistZone(m) {
+  const out = parseOutLocation(m.location);
+  if (out && out.lane) return `OUT - ${out.lane.toUpperCase()}`;
+  const parsed = parseLocation(m.location);
+  if (parsed && parsed.zone) return `ZONE ${String(parsed.zone).toUpperCase()}`;
+  return 'UNKNOWN';
+}
+
+function buildWarehouseChecklistHTML(list) {
+  const now = new Date();
+  const stamp = now.toLocaleString();
+  const byZone = {};
+  list.forEach(m => {
+    const z = classifyChecklistZone(m);
+    if (!byZone[z]) byZone[z] = [];
+    byZone[z].push(m);
+  });
+
+  const zoneOrder = ['ZONE A','ZONE B','ZONE C','OUT - NORTH','OUT - SOUTH','OUT - WEST','UNKNOWN'];
+  const zones = Object.keys(byZone).sort((a,b) => {
+    const ia = zoneOrder.indexOf(a); const ib = zoneOrder.indexOf(b);
+    if (ia === -1 && ib === -1) return a.localeCompare(b);
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
+
+  const safe = (v) => String(v ?? '').replace(/[&<>"']/g, (ch) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+
+  let html = `
+    <div>
+      <div class="print-audit-title">Warehouse Audit Checklist</div>
+      <div class="print-audit-sub">Printed: ${safe(stamp)} &nbsp;•&nbsp; Total marks: ${list.length}</div>
+    </div>
+  `;
+
+  zones.forEach(z => {
+    const rows = byZone[z].slice().sort((a,b) => {
+      // Sort by location (natural-ish), then mark
+      return String(a.location||'').localeCompare(String(b.location||'')) ||
+             String(a.mark||'').localeCompare(String(b.mark||''));
+    });
+
+    html += `<div class="print-zone">${safe(z)} (${rows.length})</div>`;
+    html += `
+      <table class="print-audit-table">
+        <thead>
+          <tr>
+            <th class="print-check">✓</th>
+            <th>Location</th>
+            <th>Mark</th>
+            <th>Order</th>
+            <th>Bales</th>
+            <th>Status</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+
+    rows.forEach(m => {
+      const status = (() => {
+        if (isInLoadingTable(m)) return 'Loading / Cleared';
+        if (isInBreakTable(m)) return 'Break / Build';
+        // fallback based on fields
+        return (m.loadingStatus || m.breakStatus || '').toString();
+      })();
+
+      html += `
+        <tr>
+          <td class="print-check"><span class="print-box"></span></td>
+          <td>${safe(m.location || '')}</td>
+          <td><strong>${safe(m.mark || '')}</strong>${isLateMark(m) ? ' <span class="late-badge">LATE</span>' : ''}</td>
+          <td>${safe(m.orderId || '')}</td>
+          <td>${safe(m.baleCount ?? '')}</td>
+          <td>${safe(status)}</td>
+          <td></td>
+        </tr>
+      `;
+    });
+
+    html += `</tbody></table>`;
+  });
+
+  return html;
+}
+
+function printWarehouseChecklist() {
+  const list = getWarehouseChecklistSourceList();
+  const el = document.getElementById('warehousePrintChecklist');
+  if (!el) return;
+
+  el.innerHTML = buildWarehouseChecklistHTML(list);
+
+  // Toggle print mode (hide app shell / show print-only)
+  document.body.classList.add('printing-audit');
+
+  // Clean up after print
+  const cleanup = () => {
+    document.body.classList.remove('printing-audit');
+    // Keep the HTML in case you want to re-print quickly; comment next line if you prefer clearing it:
+    // el.innerHTML = '';
+    window.removeEventListener('afterprint', cleanup);
+  };
+  window.addEventListener('afterprint', cleanup);
+
+  // Print
+  window.print();
+}
+
 </script>
 
 <div id="calendarEditModal" class="modal hidden">
@@ -4380,6 +4680,8 @@ renderPrevMonthNotLoaded();
 </div>
 
 
+
+  <!-- PRINT-ONLY: Warehouse Checklist -->
+  <div id="warehousePrintChecklist" class="print-only"></div>
 </body>
 </html>
-
