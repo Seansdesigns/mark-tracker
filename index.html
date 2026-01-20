@@ -1260,6 +1260,13 @@ body.printing-audit .print-only{ display:block; padding: 18px; background:#fff; 
         <option value="completed">Date Completed</option>
       </select>
 
+      <span style="font-size:12px;margin-left:12px;">Range:</span>
+      <input id="reportRangeStart" type="date" class="input-small" onchange="setCustomReportRange()" />
+      <span style="font-size:12px;">to</span>
+      <input id="reportRangeEnd" type="date" class="input-small" onchange="setCustomReportRange()" />
+      <button class="btn-sm" onclick="setReportPeriod('custom')">Run Range</button>
+      <button class="btn-sm" onclick="printRangeReport()">Print Range</button>
+
       <button class="btn-sm" style="margin-left:auto;" onclick="exportReportsAsPDF()">
         Export Snapshot as PDF
       </button>
@@ -2077,6 +2084,43 @@ if (!list.length) {
 	// ====== REPORT HELPERS ======
 
 let currentReportPeriod = 'daily'; // 'daily' | 'weekly' | 'monthly'
+let customReportRange = { start: '', end: '' }; // YYYY-MM-DD strings
+
+function ymdToLocalDate(ymd) {
+  if (!ymd) return null;
+  const parts = String(ymd).split('-').map(n => Number(n));
+  if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) return null;
+  return new Date(parts[0], parts[1] - 1, parts[2]);
+}
+
+function getCustomReportRangeFromUI() {
+  const s = document.getElementById('reportRangeStart')?.value || '';
+  const e = document.getElementById('reportRangeEnd')?.value || '';
+  if (!s || !e) return null;
+
+  const start = ymdToLocalDate(s);
+  const endInc = ymdToLocalDate(e);
+  if (!start || !endInc) return null;
+
+  // end is exclusive (end date + 1 day)
+  const end = new Date(endInc);
+  end.setDate(end.getDate() + 1);
+
+  return { start, end, startStr: s, endStr: e };
+}
+
+function setCustomReportRange() {
+  const r = getCustomReportRangeFromUI();
+  if (!r) return;
+  customReportRange.start = r.startStr;
+  customReportRange.end = r.endStr;
+}
+
+function printRangeReport() {
+  // Ensure we render the range report first (then print the same content)
+  setReportPeriod('custom');
+  exportReportsAsPDF();
+}
 
 function todayMidnight() {
   const d = new Date();
@@ -2244,9 +2288,13 @@ function generateReportData(marksSubset) {
     // CONTAINERS (late stats still apply here)
     if (m.containerType) {
       const type = String(m.containerType).trim();
-      report.containers[type] ||= { marks: 0, lateMarks: 0 };
+      report.containers[type] ||= { marks: 0, bales: 0, lateMarks: 0, lateBales: 0 };
       report.containers[type].marks++;
-      if (isLate) report.containers[type].lateMarks++;
+      report.containers[type].bales += bales;
+      if (isLate) {
+        report.containers[type].lateMarks++;
+        report.containers[type].lateBales += bales;
+      }
     }
   });
 
@@ -2260,6 +2308,16 @@ function formatPercent(numerator, denominator) {
 }
 
 function setReportPeriod(period) {
+  // custom range uses the two date inputs
+  if (period === 'custom') {
+    const r = getCustomReportRangeFromUI();
+    if (!r) {
+      alert('Select a start and end date for the range report.');
+      return;
+    }
+    customReportRange.start = r.startStr;
+    customReportRange.end = r.endStr;
+  }
   currentReportPeriod = period;
   renderReports();
 }
@@ -2736,28 +2794,44 @@ function renderReports() {
   const basisSelect = document.getElementById('reportDateBasis');
   const basis = basisSelect ? basisSelect.value : 'loaded'; // 'loaded' | 'completed'
 
-  const { start, end } = getReportRange(currentReportPeriod);
+  
+// Determine date range
+let range;
+if (currentReportPeriod === 'custom') {
+  range = getCustomReportRangeFromUI();
+  if (!range) {
+    container.innerHTML = '<p class="muted">Select a start and end date, then click <strong>Run Range</strong>.</p>';
+    return;
+  }
+} else {
+  range = getReportRange(currentReportPeriod);
+}
+const { start, end } = range;
 
-  // Filter marks by chosen date basis
-  const todayStr = new Date().toISOString().slice(0, 10);
-
+// Filter marks by chosen date basis
+const todayStr = new Date().toISOString().slice(0, 10);
 const subset = marks.filter(m => {
-  if (basis === 'completed') return false;
+  if (!m) return false;
 
-  if (!m.dateLoaded) return false;
+  // Choose which date field to use
+  const dateStr =
+    basis === 'completed'
+      ? (m.breakCompleted || m.breakCompletedDate || m.breakCompletedAt || m.clearDate || m.dateLoaded || '')
+      : (m.dateLoaded || '');
 
-  // ✅ DAILY = loaded today (string-safe)
+  if (!dateStr) return false;
+
+  // ✅ DAILY = loaded today (string-safe). (For completed-basis daily, we still compare strings.)
   if (currentReportPeriod === 'daily') {
-    return m.dateLoaded === todayStr;
+    return dateStr === todayStr;
   }
 
-  // ✅ Weekly / Monthly / YTD
-  const d = new Date(m.dateLoaded);
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return false;
   return d >= start && d < end;
 });
 
-
-  if (subset.length === 0) {
+if (subset.length === 0) {
     container.innerHTML = `<p class="muted">No marks found for this ${currentReportPeriod} snapshot.</p>`;
     return;
   }
@@ -2781,14 +2855,19 @@ const subset = marks.filter(m => {
         </div>
       `;
     }
+
+    const totalMarks = report.totals.marks || 0;
+    const totalBales = report.totals.bales || 0;
+
     const rows = entries
-      .sort((a, b) => b[1].marks - a[1].marks)
+      .sort((a, b) => (b[1].bales || 0) - (a[1].bales || 0))
       .map(([type, stats]) => `
         <tr>
           <td>${type}</td>
           <td>${stats.marks}</td>
-          <td>${stats.lateMarks}</td>
-          <td>${formatPercent(stats.lateMarks, stats.marks)}</td>
+          <td>${formatPercent(stats.marks, totalMarks)}</td>
+          <td>${stats.bales}</td>
+          <td>${formatPercent(stats.bales, totalBales)}</td>
         </tr>
       `)
       .join('');
@@ -2802,8 +2881,9 @@ const subset = marks.filter(m => {
               <tr>
                 <th>Type</th>
                 <th>Marks</th>
-                <th>Late Marks</</th>
-                <th>Late %</th>
+                <th>% Marks</th>
+                <th>Bales</th>
+                <th>% Bales</th>
               </tr>
             </thead>
             <tbody>
@@ -2815,15 +2895,62 @@ const subset = marks.filter(m => {
     `;
   }
 
-  const periodLabel =
-  currentReportPeriod === 'daily'
-    ? 'Daily Report'
-    : currentReportPeriod === 'weekly'
-    ? 'Weekly Report'
-    : currentReportPeriod === 'monthly'
-    ? 'Monthly Report'
-    : 'Year-to-Date Report';
 
+function renderLoadedMarksTable(marksSubset) {
+  if (!Array.isArray(marksSubset) || !marksSubset.length) return '';
+  const rows = marksSubset
+    .slice()
+    .sort((a, b) => (a.dateLoaded || '').localeCompare(b.dateLoaded || '') || (a.mark || '').localeCompare(b.mark || ''))
+    .map(m => `
+      <tr>
+        <td><strong>${esc(m.mark || '')}</strong></td>
+        <td>${esc(m.orderId || '')}</td>
+        <td>${esc(m.baleCount ?? '')}</td>
+        <td>${esc(m.dateLoaded || '')}</td>
+        <td>${esc(m.containerType || '')}</td>
+        <td>${esc(m.loadedBy || '')}</td>
+        <td>${esc(m.hauler || '')}</td>
+      </tr>
+    `)
+    .join('');
+
+  return `
+    <div class="card" style="margin-top:8px;">
+      <h4 style="margin:0 0 4px;font-size:13px;">Loaded Marks in Range</h4>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Mark</th>
+              <th>Order</th>
+              <th>Bales</th>
+              <th>Date Loaded</th>
+              <th>Container</th>
+              <th>Loaded By</th>
+              <th>Hauler</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+  const periodLabel = (() => {
+  if (currentReportPeriod === 'daily') return 'Daily Report';
+  if (currentReportPeriod === 'weekly') return 'Weekly Report';
+  if (currentReportPeriod === 'monthly') return 'Monthly Report';
+  if (currentReportPeriod === 'yearly') return 'Year-to-Date Report';
+  if (currentReportPeriod === 'custom') {
+    const s = customReportRange.start || '';
+    const e = customReportRange.end || '';
+    return `Range Report (${s} to ${e})`;
+  }
+  return 'Report';
+})();
 
 
   container.innerHTML = `
@@ -2845,6 +2972,7 @@ const subset = marks.filter(m => {
   ${renderPersonTable('Loaders', report.loaders, report.totals.bales)}
 
   ${renderContainerTable()}
+  ${renderLoadedMarksTable(subset)}
   ${renderLateMarksTable(subset)}
 `;
 
@@ -4685,3 +4813,8 @@ function printWarehouseChecklist() {
   <div id="warehousePrintChecklist" class="print-only"></div>
 </body>
 </html>
+
+
+
+
+
