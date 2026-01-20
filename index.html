@@ -3060,115 +3060,43 @@ function exportReportsAsPDF() {
   const contentEl = document.getElementById('reportsContent');
   if (!contentEl) return;
 
+  // Close any open drawers/overlays before printing
+  try {
+    document.querySelectorAll('.drawer-overlay, .modal, .overlay').forEach(el => el.classList.add('hidden'));
+  } catch(e) {}
+
   const win = window.open('', '_blank');
-  win.document.write(`
-    <html>
-      <head>
-        <title>Mark Tracker Report</title>
-        <style>
-          body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 12px; padding: 16px; }
-          h3, h4 { margin: 0 0 8px; }
-          table { border-collapse: collapse; width: 100%; font-size: 11px; }
-          th, td { border: 1px solid #e5e7eb; padding: 4px 6px; }
-          th { background: #f9fafb; }
-        </style>
-      </head>
-      <body>
-        <h3>Mark Tracker Report</h3>
-        ${contentEl.innerHTML}
-      
-  <!-- ========== BREAK EDIT DRAWER ========== -->
-  <div id="breakDrawerOverlay" class="drawer-overlay hidden" onclick="if(event.target===this) closeBreakDrawer();">
-    <div class="drawer-panel" role="dialog" aria-modal="true">
-      <div class="drawer-header">
-        <div class="drawer-title" id="bd_title">Edit Mark</div>
-        <button class="btn-ghost btn-sm" onclick="closeBreakDrawer()">✕</button>
-      </div>
-
-      <div class="drawer-body">
-        <div class="drawer-grid">
-          <div class="drawer-field">
-            <label>MARK</label>
-            <input id="bd_mark" disabled />
-          </div>
-          <div class="drawer-field">
-            <label>Order ID</label>
-            <input id="bd_orderId" disabled />
-          </div>
-
-          <div class="drawer-field">
-            <label>Bale Count</label>
-            <input id="bd_bales" disabled />
-          </div>
-          <div class="drawer-field">
-            <label>Location</label>
-            <input id="bd_location" />
-          </div>
-
-          <div class="drawer-field">
-            <label>Ready to Break</label>
-            <select id="bd_ready">
-              <option value="yes">Yes</option>
-              <option value="no">No</option>
-            </select>
-          </div>
-
-          <div class="drawer-field">
-            <label>Status</label>
-            <select id="bd_breakStatus">
-              <option value="Not Started">Not Started</option>
-              <option value="Ready">Ready</option>
-              <option value="In Progress">In Progress</option>
-              <option value="Completed">Completed</option>
-              <option value="Completed Breaking">Completed Breaking</option>
-            </select>
-          </div>
-
-          <div class="drawer-field">
-            <label>Breakers</label>
-            <input id="bd_breakers" placeholder="Sean, Junior..." />
-          </div>
-          <div class="drawer-field">
-            <label>Hauler</label>
-            <input id="bd_hauler" placeholder="Sean..." />
-          </div>
-
-          <div class="drawer-field">
-            <label>Date Completed</label>
-            <input id="bd_dateCompleted" type="date" />
-          </div>
-          <div class="drawer-field">
-            <label>Date to Load</label>
-            <input id="bd_dateToLoad" type="date" />
-          </div>
-
-          <div class="drawer-field">
-            <label>Clear Date</label>
-            <input id="bd_clearDate" type="date" />
-          </div>
-          <div class="drawer-field">
-            <label>Cleared?</label>
-            <select id="bd_cleared">
-              <option value="no">No</option>
-              <option value="yes">Yes</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      <div class="drawer-footer">
-        <button class="btn-outline btn-sm" onclick="closeBreakDrawer()">Close</button>
-        <button class="btn-primary btn-sm" onclick="saveBreakDrawer()">Save</button>
-      </div>
-    </div>
-  </div>
-
-</body>
-    </html>
-  `);
+  const html = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Mark Tracker Report</title>
+    <style>
+      body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; padding: 16px; }
+      h3, h4 { margin: 0 0 8px; }
+      table { border-collapse: collapse; width: 100%; font-size: 11px; }
+      th, td { border: 1px solid #e5e7eb; padding: 4px 6px; vertical-align: top; }
+      th { background: #f9fafb; }
+      .no-print { display: none !important; }
+      @media print {
+        /* Absolute safety: never print interactive overlays */
+        .drawer-overlay, .drawer-panel, .modal, .overlay { display: none !important; }
+        button, input, select, textarea { display: none !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <h3>Mark Tracker Report</h3>
+    ${contentEl.innerHTML}
+  </body>
+</html>`;
+  win.document.open();
+  win.document.write(html);
   win.document.close();
   win.focus();
-  win.print();
+  setTimeout(() => {
+    try { win.print(); } catch(e) {}
+  }, 200);
 }
 
 
