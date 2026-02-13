@@ -1419,7 +1419,7 @@ let snapshotReceivedTotal = 0;
 let snapshotReturnTotal = 0;
 
     const API_BASE =
-      'https://script.google.com/macros/s/AKfycbw10SBKQxATzLp_lU07B0K5OaeGf4OpF8PDF4byihFQ0QXsFM0lLQY5OC3awPI8c-PP9g/exec';
+      'https://script.google.com/macros/s/AKfycbzvmBQart9xWqYUP3mthBcGMSuvAT7s0VRt46vujkZCTh_nfrYpUHtnPmWmFiiAc6r2vQ/exec';
 
     let currentCalendarYear;
     let currentCalendarMonth;
@@ -2142,16 +2142,60 @@ const SHIPPER_MAP_KEY = 'shipperMap.v1';
 let shipperMap = {};
 
 function loadShipperMap() {
+  // Load local first (fast), then sync from Sheets
   try {
     const raw = localStorage.getItem(SHIPPER_MAP_KEY);
     shipperMap = raw ? (JSON.parse(raw) || {}) : {};
   } catch (e) {
     shipperMap = {};
   }
+
+  // Sync from Google Sheet so it carries across PCs
+  loadShipperMapRemote();
+}
+
+async function loadShipperMapRemote() {
+  try {
+    const res = await fetch(`${API_BASE}?action=getShippers`, { method: 'GET' });
+    if (!res.ok) return;
+    const data = await res.json();
+    const list = Array.isArray(data?.shippers) ? data.shippers : [];
+
+    const next = {};
+    list.forEach(item => {
+      const no = String(item?.shipperNo ?? '').trim();
+      const name = String(item?.shipperName ?? '').trim();
+      if (no && name) next[no] = name;
+    });
+
+    shipperMap = next;
+    saveShipperMap(); // keep local cache
+    try { renderReports(); } catch(e) {}
+    try { renderCalendar(); } catch(e) {}
+  } catch (e) {
+    // ignore (offline, CORS, etc.)
+  }
 }
 
 function saveShipperMap() {
   try { localStorage.setItem(SHIPPER_MAP_KEY, JSON.stringify(shipperMap || {})); } catch(e){}
+}
+
+async function saveShipperMapRemote() {
+  try {
+    const shippers = Object.entries(shipperMap || {}).map(([shipperNo, shipperName]) => ({
+      shipperNo: String(shipperNo ?? '').trim(),
+      shipperName: String(shipperName ?? '').trim()
+    })).filter(x => x.shipperNo);
+
+    await fetch(`${API_BASE}?action=saveShippers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shippers })
+    });
+  } catch (e) {
+    // ignore
+  }
 }
 
 function normShipperNo(v) {
@@ -2167,6 +2211,7 @@ function addShipperMapping(no, name) {
   if (!k || !n) return;
   shipperMap[k] = n;
   saveShipperMap();
+  saveShipperMapRemote();
   renderReports();
   renderCalendar();
 }
@@ -2175,9 +2220,11 @@ function removeShipperMapping(no) {
   if (!k) return;
   delete shipperMap[k];
   saveShipperMap();
+  saveShipperMapRemote();
   renderReports();
   renderCalendar();
 }
+
 function renderShipperMapManager() {
   const entries = Object.entries(shipperMap || {}).sort((a,b)=>String(a[0]).localeCompare(String(b[0])));
   const rows = entries.map(([no,name]) => `
@@ -2191,8 +2238,9 @@ function renderShipperMapManager() {
   `).join('');
 
   return `
-    <div class="card" style="margin-top:8px;">
-      <h4 style="margin:0 0 6px;font-size:13px;">Shipper Numbers</h4>
+    <details class="card" style="margin-top:8px; padding:10px;">
+      <summary style="cursor:pointer; font-weight:800; font-size:13px; list-style:none;">Shipper Numbers</summary>
+      <div style="margin-top:10px;">
       <div class="input-row" style="margin-bottom:6px;">
         <label>#</label><input id="shipperMapNo" class="input-small" placeholder="105" />
         <label>Name</label><input id="shipperMapName" class="input-small" placeholder="Allenberg" style="max-width:220px;" />
@@ -2210,7 +2258,8 @@ function renderShipperMapManager() {
             <tbody>${rows}</tbody>
           </table>
         </div>` : '<p class="muted">No shipper numbers added yet.</p>'}
-    </div>
+      </div>
+    </details>
   `;
 }
 
