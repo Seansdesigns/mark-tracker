@@ -4,14 +4,16 @@
 
 <html lang="en">
 <head>
-<link rel="manifest" href="manifest.json" />
 <meta name="theme-color" content="#2196F3" />
 
 <script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./service-worker.js');
-    });
+  // Service worker only works on http/https (not file://)
+  if (location.protocol === 'http:' || location.protocol === 'https:') {
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js').catch(() => {});
+      });
+    }
   }
 </script>
 
@@ -1006,6 +1008,14 @@ body.printing-audit .print-only{ display:block; padding: 18px; background:#fff; 
 .print-check{ width:22px; text-align:center; }
 .print-box{ display:inline-block; width:14px; height:14px; border:2px solid #000; }
 .print-zone{ font-size:13px; font-weight:800; margin:14px 0 6px; }
+
+/* Phase coloring for printed warehouse checklist */
+.print-audit-table tr.phase-break td{ }
+.print-audit-table tr.phase-loading td{ }
+.print-audit-table .phase-mark{ font-weight:800; }
+.print-audit-table tr.phase-break .phase-mark{ color:#6fa3ff; }
+.print-audit-table tr.phase-loading .phase-mark{ color:#6fdc8b; }
+
 </style>
 </head>
 <body>
@@ -1063,6 +1073,14 @@ body.printing-audit .print-only{ display:block; padding: 18px; background:#fff; 
               <div class="input-row">
                 <label>Order ID</label>
                 <input id="orderId" class="input-small" required />
+              </div>
+              <div class="input-row">
+                <label>Route</label>
+                <input id="route" class="input-small" placeholder="e.g. LBB → OKC" />
+              </div>
+              <div class="input-row">
+                <label>Shipper #</label>
+                <input id="shipperNo" class="input-small" placeholder="e.g. 105" />
               </div>
               <div class="input-row">
                 <label>Bale Count</label>
@@ -1134,7 +1152,9 @@ body.printing-audit .print-only{ display:block; padding: 18px; background:#fff; 
             <thead>
               <tr>
                 <th>MARK</th>
+                <th>Route</th>
                 <th>Order ID</th>
+                <th>Shipper #</th>
                 <th>Bales</th>
 				<th>Date To Load</th>
 				<th>Ready?</th>
@@ -1174,7 +1194,9 @@ body.printing-audit .print-only{ display:block; padding: 18px; background:#fff; 
             <thead>
               <tr>
                 <th>MARK</th>
+                <th>Route</th>
                 <th>Order ID</th>
+                <th>Shipper #</th>
                 <th>Bales</th>
                 <th>Location</th>
                 <th>Date to Load</th>
@@ -1213,7 +1235,9 @@ body.printing-audit .print-only{ display:block; padding: 18px; background:#fff; 
             <thead>
               <tr>
                 <th>MARK</th>
+                <th>Route</th>
                 <th>Order ID</th>
+                <th>Shipper #</th>
                 <th>Bales</th>
                 <th>Location</th>
                 <th>Break Completed</th>
@@ -1328,6 +1352,7 @@ body.printing-audit .print-only{ display:block; padding: 18px; background:#fff; 
       <span id="calendarMonthYear"></span>
       <button class="btn-outline btn-sm" onclick="nextMonth()">→</button>
     </div>
+    <div id="calendarShipperSummary" class="muted" style="font-size:12px; margin:-2px 0 8px;"></div>
 
 
 <div id="calendarGrid" class="calendar-grid"></div>
@@ -1466,6 +1491,9 @@ document.addEventListener("focusout", () => {
       // Ensure basic defaults exist
       if (!copy.breakStatus) copy.breakStatus = copy.readyToBreak ? 'Ready' : 'Not Started';
       if (!copy.loadingStatus) copy.loadingStatus = 'Not Loaded';
+
+      if (copy.route == null) copy.route = '';
+      if (copy.shipperNo == null) copy.shipperNo = '';
 
       return copy;
     }
@@ -1753,6 +1781,8 @@ function openMarkDetails(mark) {
 
     <div style="font-size:13px; line-height:1.45;">
       <strong>Order:</strong> ${mark.orderId || ''}<br>
+      <strong>Route:</strong> ${mark.route || '—'}<br>
+      <strong>Shipper #:</strong> ${mark.shipperNo || '—'}<br>
       <strong>Bales:</strong> ${mark.baleCount ?? ''}<br>
       <strong>Location:</strong> ${mark.location || '—'}<br><br>
 
@@ -2106,6 +2136,83 @@ if (!list.length) {
 
 let currentReportPeriod = 'daily'; // 'daily' | 'weekly' | 'monthly'
 let customReportRange = { start: '', end: '' }; // YYYY-MM-DD strings
+
+// ====== SHIPPER MAP (number -> name) ======
+const SHIPPER_MAP_KEY = 'shipperMap.v1';
+let shipperMap = {};
+
+function loadShipperMap() {
+  try {
+    const raw = localStorage.getItem(SHIPPER_MAP_KEY);
+    shipperMap = raw ? (JSON.parse(raw) || {}) : {};
+  } catch (e) {
+    shipperMap = {};
+  }
+}
+
+function saveShipperMap() {
+  try { localStorage.setItem(SHIPPER_MAP_KEY, JSON.stringify(shipperMap || {})); } catch(e){}
+}
+
+function normShipperNo(v) {
+  return String(v ?? '').trim();
+}
+function getShipperName(no) {
+  const key = normShipperNo(no);
+  return key && shipperMap && shipperMap[key] ? shipperMap[key] : '';
+}
+function addShipperMapping(no, name) {
+  const k = normShipperNo(no);
+  const n = String(name ?? '').trim();
+  if (!k || !n) return;
+  shipperMap[k] = n;
+  saveShipperMap();
+  renderReports();
+  renderCalendar();
+}
+function removeShipperMapping(no) {
+  const k = normShipperNo(no);
+  if (!k) return;
+  delete shipperMap[k];
+  saveShipperMap();
+  renderReports();
+  renderCalendar();
+}
+function renderShipperMapManager() {
+  const entries = Object.entries(shipperMap || {}).sort((a,b)=>String(a[0]).localeCompare(String(b[0])));
+  const rows = entries.map(([no,name]) => `
+    <tr>
+      <td>${esc(no)}</td>
+      <td>${esc(name)}</td>
+      <td style="text-align:right;">
+        <button class="btn-sm btn-danger" onclick="removeShipperMapping('${String(no).replace(/'/g,"\'")}')">Remove</button>
+      </td>
+    </tr>
+  `).join('');
+
+  return `
+    <div class="card" style="margin-top:8px;">
+      <h4 style="margin:0 0 6px;font-size:13px;">Shipper Numbers</h4>
+      <div class="input-row" style="margin-bottom:6px;">
+        <label>#</label><input id="shipperMapNo" class="input-small" placeholder="105" />
+        <label>Name</label><input id="shipperMapName" class="input-small" placeholder="Allenberg" style="max-width:220px;" />
+        <button class="btn-primary btn-sm" type="button"
+          onclick="addShipperMapping(document.getElementById('shipperMapNo')?.value, document.getElementById('shipperMapName')?.value);
+                   const a=document.getElementById('shipperMapNo'); if(a) a.value='';
+                   const b=document.getElementById('shipperMapName'); if(b) b.value='';">
+          Add / Update
+        </button>
+      </div>
+      ${entries.length ? `
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>Name</th><th></th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>` : '<p class="muted">No shipper numbers added yet.</p>'}
+    </div>
+  `;
+}
 
 function ymdToLocalDate(ymd) {
   if (!ymd) return null;
@@ -2852,12 +2959,15 @@ const subset = marks.filter(m => {
   return d >= start && d < end;
 });
 
-if (subset.length === 0) {
+  // Exclude canceled marks from main metrics
+  const activeSubset = subset.filter(m => !m.cancelled);
+
+if (activeSubset.length === 0) {
     container.innerHTML = `<p class="muted">No marks found for this ${currentReportPeriod} snapshot.</p>`;
     return;
   }
 
-  const report = generateReportData(subset);
+  const report = generateReportData(activeSubset);
   const total = report.totals.marks;
   const evalTotal = report.totals.evaluatedForTimeliness;
   const lateTotal = report.totals.lateMarks;
@@ -2865,6 +2975,220 @@ if (subset.length === 0) {
 
   const latePct = formatPercent(lateTotal, evalTotal);
   const onTimePct = formatPercent(onTimeTotal, evalTotal);
+
+
+  // ===== Shipper stats (for this report subset) =====
+  const shipperCounts = {};
+  let shipperMissing = 0;
+  let shipperUnmapped = 0;
+
+  activeSubset.forEach(m => {
+    const no = normShipperNo(m.shipperNo);
+    if (!no) { shipperMissing++; return; }
+    const name = getShipperName(no);
+    if (!name) { shipperUnmapped++; return; }
+    const key = `${no} — ${name}`;
+    shipperCounts[key] = (shipperCounts[key] || 0) + 1;
+  });
+
+  // On-time vs late by load type (containerType) using dateLoaded vs dateToLoad
+  const timelinessByType = {};
+  subset.forEach(m => {
+    const type = (m.containerType || 'Unspecified').toString().trim() || 'Unspecified';
+    if (!timelinessByType[type]) timelinessByType[type] = { evaluated: 0, onTime: 0, late: 0 };
+
+    if (!m.dateLoaded || !m.dateToLoad) return;
+
+    const scheduled = new Date(m.dateToLoad);
+    const actual = new Date(m.dateLoaded);
+    if (isNaN(scheduled.getTime()) || isNaN(actual.getTime())) return;
+
+    const daysLate = Math.floor((actual - scheduled) / 86400000) - 2;
+    timelinessByType[type].evaluated++;
+    if (daysLate > 0) timelinessByType[type].late++;
+    else timelinessByType[type].onTime++;
+  });
+
+
+  // On-time vs late by shipper (mapped shippers only) using dateLoaded vs dateToLoad
+  const timelinessByShipper = {};
+  subset.forEach(m => {
+    const no = normShipperNo(m.shipperNo);
+    if (!no) return;
+    const name = getShipperName(no);
+    if (!name) return; // only mapped shippers for shipper-level timeliness
+    const shipperKey = `${no} — ${name}`;
+    if (!timelinessByShipper[shipperKey]) timelinessByShipper[shipperKey] = { evaluated: 0, onTime: 0, late: 0, byType: {} };
+
+    if (!m.dateLoaded || !m.dateToLoad) return;
+
+    const scheduled = new Date(m.dateToLoad);
+    const actual = new Date(m.dateLoaded);
+    if (isNaN(scheduled.getTime()) || isNaN(actual.getTime())) return;
+
+    const type = (m.containerType || 'Unspecified').toString().trim() || 'Unspecified';
+    if (!timelinessByShipper[shipperKey].byType[type]) timelinessByShipper[shipperKey].byType[type] = { evaluated: 0, onTime: 0, late: 0 };
+
+    const daysLate = Math.floor((actual - scheduled) / 86400000) - 2;
+
+    timelinessByShipper[shipperKey].evaluated++;
+    timelinessByShipper[shipperKey].byType[type].evaluated++;
+
+    if (daysLate > 0) {
+      timelinessByShipper[shipperKey].late++;
+      timelinessByShipper[shipperKey].byType[type].late++;
+    } else {
+      timelinessByShipper[shipperKey].onTime++;
+      timelinessByShipper[shipperKey].byType[type].onTime++;
+    }
+  });
+
+  function renderTimelinessByShipperCard() {
+    const entries = Object.entries(timelinessByShipper);
+    if (!entries.length) return '';
+    const rows = entries
+      .sort((a,b)=>(b[1].evaluated||0)-(a[1].evaluated||0))
+      .map(([shipper, s]) => `
+        <tr>
+          <td>${esc(shipper)}</td>
+          <td>${s.evaluated}</td>
+          <td>${s.onTime}</td>
+          <td>${formatPercent(s.onTime, s.evaluated)}</td>
+          <td>${s.late}</td>
+          <td>${formatPercent(s.late, s.evaluated)}</td>
+        </tr>
+      `).join('');
+    return `
+      <div class="card" style="margin-top:8px;">
+        <h4 style="margin:0 0 4px;font-size:13px;">On-time vs Late (by shipper)</h4>
+        <p class="muted" style="margin:0 0 6px; font-size:12px;">Mapped shippers only. Evaluates only marks with both Date To Load and Date Loaded.</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Shipper</th>
+                <th>Eval</th>
+                <th>On-Time</th>
+                <th>%</th>
+                <th>Late</th>
+                <th>%</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderTimelinessByShipperTypeCard() {
+    const shipperEntries = Object.entries(timelinessByShipper);
+    if (!shipperEntries.length) return '';
+    const flat = [];
+    shipperEntries.forEach(([shipper, s]) => {
+      Object.entries(s.byType || {}).forEach(([type, t]) => {
+        if (!t || !t.evaluated) return;
+        flat.push({ shipper, type, ...t });
+      });
+    });
+    if (!flat.length) return '';
+    flat.sort((a,b) => (a.shipper.localeCompare(b.shipper)) || ((b.evaluated||0)-(a.evaluated||0)) || a.type.localeCompare(b.type));
+    const rows = flat.map(r => `
+      <tr>
+        <td>${esc(r.shipper)}</td>
+        <td>${esc(r.type)}</td>
+        <td>${r.evaluated}</td>
+        <td>${r.onTime}</td>
+        <td>${formatPercent(r.onTime, r.evaluated)}</td>
+        <td>${r.late}</td>
+        <td>${formatPercent(r.late, r.evaluated)}</td>
+      </tr>
+    `).join('');
+    return `
+      <div class="card" style="margin-top:8px;">
+        <h4 style="margin:0 0 4px;font-size:13px;">On-time vs Late (by shipper & load type)</h4>
+        <p class="muted" style="margin:0 0 6px; font-size:12px;">Mapped shippers only. Evaluates only marks with both Date To Load and Date Loaded.</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Shipper</th>
+                <th>Load Type</th>
+                <th>Eval</th>
+                <th>On-Time</th>
+                <th>%</th>
+                <th>Late</th>
+                <th>%</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }
+
+
+
+  function renderShipperStatsCard() {
+    const entries = Object.entries(shipperCounts).sort((a,b)=>b[1]-a[1]);
+    const rows = entries.map(([k,v]) => `<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join('');
+    return `
+      <div class="card" style="margin-top:8px;">
+        <h4 style="margin:0 0 4px;font-size:13px;">Shippers (this report)</h4>
+        <p style="margin:0 0 8px; font-size:12px;">
+          Mapped shippers: <strong>${entries.length}</strong> •
+          Marks with <strong>no shipper#</strong>: <strong>${shipperMissing}</strong> •
+          Marks with <strong>unmapped shipper#</strong>: <strong>${shipperUnmapped}</strong>
+        </p>
+        ${entries.length ? `
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Shipper</th><th>Marks</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>` : '<p class="muted">No mapped shipper numbers found in this report range.</p>'}
+      </div>
+    `;
+  }
+
+  function renderTimelinessByTypeCard() {
+    const entries = Object.entries(timelinessByType);
+    if (!entries.length) return '';
+    const rows = entries
+      .sort((a,b)=>(b[1].evaluated||0)-(a[1].evaluated||0))
+      .map(([type, s]) => `
+        <tr>
+          <td>${esc(type)}</td>
+          <td>${s.evaluated}</td>
+          <td>${s.onTime}</td>
+          <td>${formatPercent(s.onTime, s.evaluated)}</td>
+          <td>${s.late}</td>
+          <td>${formatPercent(s.late, s.evaluated)}</td>
+        </tr>
+      `).join('');
+    return `
+      <div class="card" style="margin-top:8px;">
+        <h4 style="margin:0 0 4px;font-size:13px;">On-time vs Late (by load type)</h4>
+        <p class="muted" style="margin:0 0 6px; font-size:12px;">Evaluates only marks with both Date To Load and Date Loaded.</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Load Type</th>
+                <th>Eval</th>
+                <th>On-Time</th>
+                <th>%</th>
+                <th>Late</th>
+                <th>%</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }
 
   function renderContainerTable() {
     const entries = Object.entries(report.containers);
@@ -2925,8 +3249,10 @@ function renderLoadedMarksTable(marksSubset) {
     .map(m => `
       <tr>
         <td><strong>${esc(m.mark || '')}</strong></td>
-        <td>${esc(m.orderId || '')}</td>
-        <td>${esc(m.baleCount ?? '')}</td>
+          <td>${esc(m.route || '')}</td>
+          <td>${esc(m.orderId || '')}</td>
+          <td>${esc(m.shipperNo || '')}</td>
+          <td>${esc(m.baleCount ?? '')}</td>
         <td>${esc(m.dateLoaded || '')}</td>
         <td>${esc(m.containerType || '')}</td>
         <td>${esc(m.loadedBy || '')}</td>
@@ -2984,17 +3310,27 @@ function renderLoadedMarksTable(marksSubset) {
       Total marks in snapshot: <strong>${report.totals.marks}</strong><br>
       Total bales in snapshot: <strong>${report.totals.bales}</strong><br>
       Marks evaluated for on-time vs late: <strong>${report.totals.evaluatedForTimeliness}</strong><br>
-      Late marks: <strong>${report.totals.lateMarks}</strong>
+      On-time marks: <strong>${onTimeTotal}</strong> (${onTimePct})<br>
+      Late marks: <strong>${report.totals.lateMarks}</strong> (${latePct})
     </p>
   </div>
+
+  ${renderShipperMapManager()}
+
+  ${renderShipperStatsCard()}
+  ${renderTimelinessByShipperCard()}
+  ${renderTimelinessByShipperTypeCard()}
+  ${renderTimelinessByTypeCard()}
 
   ${renderPersonTable('Breakers', report.breakers, report.totals.bales)}
   ${renderPersonTable('Haulers', report.haulers, report.totals.bales)}
   ${renderPersonTable('Loaders', report.loaders, report.totals.bales)}
 
   ${renderContainerTable()}
-  ${renderLoadedMarksTable(subset)}
-  ${renderLateMarksTable(subset)}
+  ${renderLoadedMarksTable(activeSubset)}
+  ${renderLateMarksTable(activeSubset)}
+
+  ${renderCanceledMarksCard()}
 `;
 
 }
@@ -3077,6 +3413,84 @@ function renderLateMarksTable(marksSubset) {
 }
 
 // Simple print-to-PDF of the report content
+
+function renderCanceledMarksCard() {
+  const canceled = (marks || []).filter(m => m && m.cancelled);
+
+  if (!canceled.length) {
+    return `
+      <div class="card" style="margin-top:8px;">
+        <h4>Canceled Orders</h4>
+        <p class="muted" style="margin:0;">No canceled marks.</p>
+      </div>
+    `;
+  }
+
+  // newest first
+  canceled.sort((a,b) => String(b.cancelledDate || '').localeCompare(String(a.cancelledDate || '')));
+
+  const rows = canceled.map(m => `
+    <tr>
+      <td><strong>${esc(m.mark || '')}</strong></td>
+      <td>${esc(m.route || '')}</td>
+      <td>${esc(m.orderId || '')}</td>
+      <td>${esc(m.shipperNo || '')}</td>
+      <td>${esc((getShipperName(normShipperNo(m.shipperNo)) || ''))}</td>
+      <td>${esc(m.baleCount ?? '')}</td>
+      <td>${esc(m.dateToLoad || '')}</td>
+      <td>${esc(m.cancelledDate || '')}</td>
+      <td style="white-space:nowrap;">
+        <button class="btn-sm btn-outline" onclick="event.stopPropagation(); unCancelMark('${m.id}')">Restore</button>
+      </td>
+    </tr>
+  `).join('');
+
+  return `
+    <div class="card" style="margin-top:8px;">
+      <h4>Canceled Orders (${canceled.length})</h4>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Mark</th>
+              <th>Route</th>
+              <th>Order ID</th>
+              <th>Shipper #</th>
+              <th>Shipper</th>
+              <th>Bales</th>
+              <th>Date To Load</th>
+              <th>Canceled Date</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function unCancelMark(id) {
+  const m = marks.find(x => x.id === id);
+  if (!m) return;
+
+  const ok = confirm(`Restore mark "${m.mark || ''}" from Canceled?`);
+  if (!ok) return;
+
+  m.cancelled = false;
+  // Keep cancelledDate as history; you can clear if you want:
+  // m.cancelledDate = '';
+
+  saveData();
+  pushMarkToSheets(m);
+
+  try { renderAllMarks(); } catch(e) {}
+  try { renderBreakTable(); } catch(e) {}
+  try { renderLoadingTable(); } catch(e) {}
+  try { renderReports(); } catch(e) {}
+}
+
+
 function exportReportsAsPDF() {
   const contentEl = document.getElementById('reportsContent');
   if (!contentEl) return;
@@ -3122,13 +3536,15 @@ function exportReportsAsPDF() {
 
 
     // ===== DATA MODEL =====
-    function createMarkObj({ mark, orderId, baleCount, location, dateToLoad, readyToBreak }) {
+    function createMarkObj({ mark, route, orderId, shipperNo, baleCount, location, dateToLoad, readyToBreak }) {
       const now = new Date().toISOString();
       return {
         id: Date.now().toString() + '_' + Math.random().toString(16).slice(2),
         mark: mark.trim().toUpperCase(),
         orderId: orderId.trim(),
-        baleCount,
+                route: (route || '').toString().trim(),
+        shipperNo: (shipperNo || '').toString().trim(),
+baleCount,
         location: location.trim(),
         dateToLoad: dateToLoad || '',
         readyToBreak: !!readyToBreak,
@@ -3158,6 +3574,8 @@ function exportReportsAsPDF() {
 
   const markInput = document.getElementById('mark');
   const orderIdInput = document.getElementById('orderId');
+  const routeInput = document.getElementById('route');
+  const shipperNoInput = document.getElementById('shipperNo');
   const baleInput = document.getElementById('baleCount');
   const locInput = document.getElementById('location');
   const dateToLoadInput = document.getElementById('dateToLoad');
@@ -3174,7 +3592,9 @@ function exportReportsAsPDF() {
 
   const newMark = createMarkObj({
     mark: markVal,
+    route: (routeInput?.value || '').trim(),
     orderId: orderVal,
+    shipperNo: (shipperNoInput?.value || '').trim(),
     baleCount: baleVal,
     location: locInput.value || '',
     dateToLoad: dateToLoadInput.value || '',
@@ -3245,7 +3665,29 @@ function exportReportsAsPDF() {
 }
 
 
-    function markAsCleared(id) {
+    function cancelMark(id) {
+  const m = marks.find(x => x.id === id);
+  if (!m) return;
+
+  const ok = confirm(`Cancel order for mark "${m.mark || ''}"? This will remove it from Break/Build and Loading and place it in the Canceled report.`);
+  if (!ok) return;
+
+  const today = new Date().toISOString().slice(0, 10);
+  m.cancelled = true;
+  m.cancelledDate ||= today;
+
+  // Optional: if it was previously "Loaded", keep the history but it's still considered canceled going forward.
+  saveData();
+  pushMarkToSheets(m);
+
+  // Re-render views immediately
+  try { renderAllMarks(); } catch(e) {}
+  try { renderBreakTable(); } catch(e) {}
+  try { renderLoadingTable(); } catch(e) {}
+  try { renderReports(); } catch(e) {}
+}
+
+function markAsCleared(id) {
       const m = marks.find(x => x.id === id);
       if (!m) return;
 
@@ -3555,13 +3997,15 @@ function deleteMark(id) {
 
   const q = String(inputEl?.value || '').trim().toLowerCase();
 
-  const filtered = (marks || [])
+  const filtered = (marks || []).filter(m => !m.cancelled)
     .filter(m => {
       if (!q) return true;
 
       const hay = [
         m.mark,
+        m.route,
         m.orderId,
+        m.shipperNo,
         m.location,
         m.breakers,
         m.hauler,
@@ -3601,7 +4045,7 @@ function deleteMark(id) {
             <div>
               <div style="font-weight:800; font-size:14px;">${m.mark || ''}</div>
               <div class="muted" style="font-size:12px;">
-                Order: ${m.orderId || ''} • Bales: ${m.baleCount ?? ''} • Loc: ${m.location || '—'}
+                Order: ${m.orderId || ''} • Route: ${(m.route || '—')} • Shipper#: ${(m.shipperNo || '—')} • Bales: ${m.baleCount ?? ''} • Loc: ${m.location || '—'}
               </div>
               ${peopleLine ? `<div class="muted" style="font-size:12px; margin-top:4px;">${peopleLine}</div>` : ``}
             </div>
@@ -3635,6 +4079,7 @@ function deleteMark(id) {
 
   // Hide marks that are cleared AND completed/completed breaking
   const filtered = marks
+    .filter(m => !m.cancelled)
     .filter(m => !(
       m.cleared &&
       (m.breakStatus === 'Completed' || m.breakStatus === 'Completed Breaking')
@@ -3644,7 +4089,9 @@ function deleteMark(id) {
       return (
         (m.mark || '').toString().toLowerCase().includes(q) ||
         (m.orderId || '').toString().toLowerCase().includes(q) ||
-        (m.location || '').toString().toLowerCase().includes(q)
+        (m.location || '').toString().toLowerCase().includes(q) ||
+        (m.route || '').toString().toLowerCase().includes(q) ||
+        (m.shipperNo || '').toString().toLowerCase().includes(q)
       );
     });
 
@@ -3676,7 +4123,7 @@ function deleteMark(id) {
 
     rows.push(`
       <tr class="group-row">
-        <td colspan="8"><strong>${esc(status)}</strong> (${group.length})</td>
+        <td colspan="10"><strong>${esc(status)}</strong> (${group.length})</td>
       </tr>
     `);
 
@@ -3695,8 +4142,10 @@ if (m.breakStatus === 'Completed' || m.breakStatus === 'Completed Breaking') {
       rows.push(`
         <tr class="${trClass}">
           <td><strong>${esc(m.mark || '')}</strong></td>
-          <td>${esc(m.orderId || '')}</td>
-          <td>${esc(m.baleCount ?? '')}</td>
+              <td>${esc(m.route || '')}</td>
+              <td>${esc(m.orderId || '')}</td>
+              <td>${esc(m.shipperNo || '')}</td>
+              <td>${esc(m.baleCount ?? '')}</td>
           <td>
             <input type="date" value="${esc(m.dateToLoad || '')}"
                    onblur="updateMarkField('${m.id}', 'dateToLoad', this.value)">
@@ -3725,6 +4174,7 @@ if (m.breakStatus === 'Completed' || m.breakStatus === 'Completed Breaking') {
               ${m.cleared ? 'Unclear' : 'Clear'}
             </button>
             <button class="btn-sm" onclick="event.stopPropagation(); printPinkCard('${m.id}')">Pink Tag</button>
+            <button class="btn-sm btn-danger" onclick="event.stopPropagation(); cancelMark('${m.id}')">Cancel</button>
           </td>
         </tr>
       `);
@@ -3732,7 +4182,7 @@ if (m.breakStatus === 'Completed' || m.breakStatus === 'Completed Breaking') {
   });
 
   tbody.innerHTML =
-    rows.join('') || '<tr><td colspan="8" class="muted">No marks yet.</td></tr>';
+    rows.join('') || '<tr><td colspan="10" class="muted">No marks yet.</td></tr>';
 
   updateBadges();
 }
@@ -3963,6 +4413,7 @@ function closeQrScanner() {
 
       // Loading = cleared + break completed
       const filtered = marks
+        .filter(m => !m.cancelled)
         .filter(m =>
           m.cleared &&
           (m.breakStatus === 'Completed' || m.breakStatus === 'Completed Breaking')
@@ -3972,7 +4423,9 @@ function closeQrScanner() {
           return (
             (m.mark || '').toString().toLowerCase().includes(q) ||
             (m.orderId || '').toString().toLowerCase().includes(q) ||
-            (m.location || '').toString().toLowerCase().includes(q)
+            (m.location || '').toString().toLowerCase().includes(q) ||
+            (m.route || '').toString().toLowerCase().includes(q) ||
+            (m.shipperNo || '').toString().toLowerCase().includes(q)
           );
         });
 
@@ -3993,7 +4446,7 @@ function closeQrScanner() {
 
         rows.push(`
           <tr class="group-row">
-            <td colspan="7"><strong>${esc(status)}</strong> (${group.length})</td>
+            <td colspan="9"><strong>${esc(status)}</strong> (${group.length})</td>
           </tr>
         `);
 
@@ -4002,13 +4455,16 @@ function closeQrScanner() {
           rows.push(`
             <tr class="${m.loadingStatus === 'Loaded' ? 'row-loaded' : ''}">
               <td><strong>${esc(m.mark || '')}</strong></td>
+              <td>${esc(m.route || '')}</td>
               <td>${esc(m.orderId || '')}</td>
+              <td>${esc(m.shipperNo || '')}</td>
               <td>${esc(m.baleCount ?? '')}</td>
               <td>${esc(m.location || '')}</td>
               <td>${esc(m.dateToLoad || '')}</td>
               <td>${esc(m.loadingStatus || 'Not Loaded')}</td>
               <td>
                 <button class="btn-sm" onclick='openLoadingDrawer(${ref})'>Edit</button>
+                <button class="btn-sm btn-danger" onclick="event.stopPropagation(); cancelMark('${m.id}')">Cancel</button>
               </td>
             </tr>
           `);
@@ -4017,7 +4473,7 @@ function closeQrScanner() {
 
       tbody.innerHTML =
         rows.join('') ||
-        '<tr><td colspan="7" class="muted">No cleared marks yet.</td></tr>';
+        '<tr><td colspan="9" class="muted">No cleared marks yet.</td></tr>';
 
       updateBadges();
     }
@@ -4188,6 +4644,35 @@ function getCalendarTooltip(m) {
 
   monthYearEl.textContent =
     monthNames[currentCalendarMonth] + ' ' + currentCalendarYear;
+
+
+  // ===== Shipper pickup summary (outstanding, not loaded) =====
+  const sumEl = document.getElementById('calendarShipperSummary');
+  if (sumEl) {
+    const outstanding = (marks || []).filter(m => m && !m.cancelled && m.loadingStatus !== 'Loaded');
+    const byShipper = {};
+    let withNo = 0;
+    let withUnmapped = 0;
+    outstanding.forEach(m => {
+      const no = normShipperNo(m.shipperNo);
+      if (!no) { withNo++; return; }
+      const name = getShipperName(no);
+      if (!name) { withUnmapped++; return; }
+      const key = `${no} — ${name}`;
+      byShipper[key] = (byShipper[key] || 0) + 1;
+    });
+    const shipperCount = Object.keys(byShipper).length;
+    const top = Object.entries(byShipper).sort((a,b)=>b[1]-a[1]).slice(0,4)
+      .map(([k,v])=>`${esc(k)} (${v})`).join(' • ');
+    const totalOutstanding = outstanding.length;
+    sumEl.innerHTML = `
+      <strong>Pickup summary:</strong>
+      ${shipperCount} shipper${shipperCount===1?'':'s'} / ${totalOutstanding} mark${totalOutstanding===1?'':'s'} outstanding.
+      ${withNo ? `&nbsp; <span class="badge" style="font-size:10px;">No shipper#: ${withNo}</span>` : ''}
+      ${withUnmapped ? `&nbsp; <span class="badge" style="font-size:10px;">Unmapped shipper#: ${withUnmapped}</span>` : ''}
+      ${top ? `<div style="margin-top:4px;">${top}${Object.keys(byShipper).length>4 ? ' • …' : ''}</div>` : ''}
+    `;
+  }
 
   let html = '';
 
@@ -4424,6 +4909,7 @@ renderOutsideCalendarList();
     document.addEventListener('DOMContentLoaded', async () => {
       initTabs();
       initCalendarState();
+      loadShipperMap();
       await loadMarksFromSheets();
       setInterval(() => {
   if (!isUserEditing) {
@@ -4506,7 +4992,7 @@ function buildWarehouseChecklistHTML(list) {
             <th>Order</th>
             <th>Bales</th>
             <th>Status</th>
-            <th>Notes</th>
+            <th>Basket Check</th>
           </tr>
         </thead>
         <tbody>
@@ -4521,10 +5007,10 @@ function buildWarehouseChecklistHTML(list) {
       })();
 
       html += `
-        <tr>
+        <tr class="${(isInBreakTable(m) ? 'phase-break' : (isInLoadingTable(m) ? 'phase-loading' : ''))}">
           <td class="print-check"><span class="print-box"></span></td>
           <td>${safe(m.location || '')}</td>
-          <td><strong>${safe(m.mark || '')}</strong>${isLateMark(m) ? ' <span class="late-badge">LATE</span>' : ''}</td>
+          <td><span class="phase-mark">${safe(m.mark || '')}</span>${isLateMark(m) ? ' <span class="late-badge">LATE</span>' : ''}</td>
           <td>${safe(m.orderId || '')}</td>
           <td>${safe(m.baleCount ?? '')}</td>
           <td>${safe(status)}</td>
