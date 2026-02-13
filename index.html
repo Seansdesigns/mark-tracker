@@ -2230,13 +2230,26 @@ async function saveShipperMapRemote() {
       shipperName: String(shipperName ?? '').trim()
     })).filter(x => x.shipperNo);
 
-    await fetch(`${API_BASE}?action=saveShippers`, {
+    const res = await fetch(`${API_BASE}?action=saveShippers`, {
       method: 'POST',
+      mode: 'cors',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ shippers })
     });
+
+    let data = null;
+    try { data = await res.json(); } catch(e) {}
+
+    if (!res.ok || (data && data.error)) {
+      console.error('saveShippers failed', res.status, data);
+      alert('Save to Shippers sheet failed. Make sure your Apps Script is deployed with the saveShippers endpoint and access is set to "Anyone with the link".');
+      return false;
+    }
+    return true;
   } catch (e) {
-    // ignore
+    console.error('saveShippers error', e);
+    alert('Save to Shippers sheet failed (network/CORS). If you are opening the HTML as file://, try hosting it (or keep using your existing setup that already syncs marks).');
+    return false;
   }
 }
 
@@ -2255,22 +2268,24 @@ function getShipperName(no) {
   const key = normShipperNo(no);
   return key && shipperMap && shipperMap[key] ? shipperMap[key] : '';
 }
-function addShipperMapping(no, name) {
+async function addShipperMapping(no, name) {
   const k = normShipperNo(no);
   const n = String(name ?? '').trim();
   if (!k || !n) return;
   shipperMap[k] = n;
   saveShipperMap();
-  saveShipperMapRemote();
+  const ok = await saveShipperMapRemote();
+  if (ok) await loadShipperMapRemote();
   renderReports();
   renderCalendar();
 }
-function removeShipperMapping(no) {
+async function removeShipperMapping(no) {
   const k = normShipperNo(no);
   if (!k) return;
   delete shipperMap[k];
   saveShipperMap();
-  saveShipperMapRemote();
+  const ok = await saveShipperMapRemote();
+  if (ok) await loadShipperMapRemote();
   renderReports();
   renderCalendar();
 }
