@@ -2230,25 +2230,28 @@ async function saveShipperMapRemote() {
       shipperName: String(shipperName ?? '').trim()
     })).filter(x => x.shipperNo);
 
+    // IMPORTANT: Avoid CORS preflight by NOT sending application/json headers.
+    // Sending a plain string body uses Content-Type: text/plain;charset=UTF-8 (a "simple" request),
+    // which Apps Script can still read via e.postData.contents.
     const res = await fetch(`${API_BASE}?action=saveShippers`, {
       method: 'POST',
-      mode: 'cors',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ shippers })
     });
 
+    // If the deployment is correct, this should be readable JSON.
     let data = null;
-    try { data = await res.json(); } catch(e) {}
+    try { data = await res.json(); } catch (e) {}
 
     if (!res.ok || (data && data.error)) {
       console.error('saveShippers failed', res.status, data);
-      alert('Save to Shippers sheet failed. Make sure your Apps Script is deployed with the saveShippers endpoint and access is set to "Anyone with the link".');
+      alert('Save to Shippers sheet failed. In Apps Script: Deploy → Manage deployments → Edit → select NEW VERSION → Deploy. Also ensure access is "Anyone".');
       return false;
     }
+
     return true;
   } catch (e) {
     console.error('saveShippers error', e);
-    alert('Save to Shippers sheet failed (network/CORS). If you are opening the HTML as file://, try hosting it (or keep using your existing setup that already syncs marks).');
+    alert('Save to Shippers sheet failed (network/CORS). This usually means the request triggered CORS rules. Make sure you are using the latest v25 file and your Apps Script deployment is set to "Anyone".');
     return false;
   }
 }
