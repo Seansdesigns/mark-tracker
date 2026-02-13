@@ -1640,6 +1640,7 @@ function resetSnapshotAdjustments() {
 async function loadMarksFromSheets() {
   // Start from whatever's local
   loadData();
+  applyLocalCancelledFlags();
   loadSnapshotTotals();
   renderAll();
 
@@ -1661,6 +1662,8 @@ async function loadMarksFromSheets() {
       incoming = dedupeMarks(incoming);
 
       marks = incoming;
+
+      applyLocalCancelledFlags();
 
       if (data.timestamp) {
         lastSync = data.timestamp;
@@ -1873,6 +1876,7 @@ function countZoneStats(zone) {
   let lateCount = 0;
 
   marks.forEach(m => {
+    if (isCancelled(m)) return;
     if (!m.location) return;
     if (m.loadingStatus === 'Loaded') return;
 
@@ -1968,7 +1972,7 @@ function renderPrevMonthNotLoaded() {
   const monthName = monthNames[start.getMonth()];
   titleEl.textContent = `${monthName} Not Loaded`;
 
-  const list = marks
+  const list = (marks || []).filter(m => !isCancelled(m))
     .filter(m => {
       const dt = (m.dateToLoad || '');
       if (!dt) return false;
@@ -2055,7 +2059,7 @@ function renderOutsideCalendarList() {
 
   const notLoaded = m => (m.loadingStatus || 'Not Loaded') !== 'Loaded';
 
-  const list = marks
+  const list = (marks || []).filter(m => !isCancelled(m))
     .filter(m => {
       if (!notLoaded(m)) return false;
       const dt = (m.dateToLoad || '');
@@ -2139,6 +2143,44 @@ let customReportRange = { start: '', end: '' }; // YYYY-MM-DD strings
 
 // ====== SHIPPER MAP (number -> name) ======
 const SHIPPER_MAP_KEY = 'shipperMap.v1';
+
+const CANCELLED_IDS_KEY = 'cancelledIds.v1';
+let cancelledIds = new Set();
+
+function loadCancelledIds() {
+  try {
+    const raw = localStorage.getItem(CANCELLED_IDS_KEY);
+    const arr = raw ? (JSON.parse(raw) || []) : [];
+    cancelledIds = new Set(Array.isArray(arr) ? arr.map(x => String(x)) : []);
+  } catch (e) {
+    cancelledIds = new Set();
+  }
+}
+function saveCancelledIds() {
+  try { localStorage.setItem(CANCELLED_IDS_KEY, JSON.stringify(Array.from(cancelledIds || []))); } catch(e){}
+}
+function isCancelledLocal(id) {
+  return cancelledIds && cancelledIds.has(String(id));
+}
+
+function applyLocalCancelledFlags() {
+  if (!Array.isArray(marks)) return;
+  marks.forEach(m => {
+    if (!m) return;
+    // Normalize sheet TRUE/FALSE strings too
+    const sheetCancelled = (m.cancelled === true || m.cancelled === 'TRUE' || m.cancelled === 'true');
+    if (sheetCancelled) {
+      cancelledIds.add(String(m.id));
+      m.cancelled = true;
+      if (m.cancelledDate === undefined && m.canceledDate !== undefined) m.cancelledDate = m.canceledDate;
+      return;
+    }
+    if (isCancelledLocal(m.id)) {
+      m.cancelled = true;
+    }
+  });
+  saveCancelledIds();
+}
 let shipperMap = {};
 
 function loadShipperMap() {
@@ -2196,6 +2238,14 @@ async function saveShipperMapRemote() {
   } catch (e) {
     // ignore
   }
+}
+
+function isCancelled(m) {
+  if (!m) return false;
+  const v = m.cancelled;
+  if (v === true) return true;
+  const s = String(v ?? '').trim().toLowerCase();
+  return s === 'true' || s === 'yes' || s === '1' || s === 'y';
 }
 
 function normShipperNo(v) {
@@ -2736,6 +2786,7 @@ function renderWarehouseMap() {
 
   // ✅ Only marks physically in the warehouse
   marks.forEach(m => {
+    if (isCancelled(m)) return;
     if (!m.location) return;
 
     if (
@@ -2829,6 +2880,7 @@ function renderOutsideLanes() {
 
   // Collect valid outside marks
   marks.forEach(m => {
+    if (isCancelled(m)) return;
     if (!m.location) return;
 
     if (
@@ -2902,6 +2954,7 @@ function renderOutsideLanes() {
 
   // collect valid outside marks
   marks.forEach(m => {
+    if (isCancelled(m)) return;
     if (!m.location) return;
 
     if (
@@ -3009,7 +3062,7 @@ const subset = marks.filter(m => {
 });
 
   // Exclude canceled marks from main metrics
-  const activeSubset = subset.filter(m => !m.cancelled);
+  const activeSubset = subset.filter(m => !(m.cancelled === true || m.cancelled === 'TRUE' || m.cancelled === 'true'));
 
 if (activeSubset.length === 0) {
     container.innerHTML = `<p class="muted">No marks found for this ${currentReportPeriod} snapshot.</p>`;
@@ -3030,12 +3083,13 @@ if (activeSubset.length === 0) {
   const shipperCounts = {};
   let shipperMissing = 0;
   let shipperUnmapped = 0;
+  const unmappedNoCounts = {};
 
   activeSubset.forEach(m => {
     const no = normShipperNo(m.shipperNo);
     if (!no) { shipperMissing++; return; }
     const name = getShipperName(no);
-    if (!name) { shipperUnmapped++; return; }
+    if (!name) { shipperUnmapped++; unmappedNoCounts[no] = (unmappedNoCounts[no] || 0) + 1; return; }
     const key = `${no} — ${name}`;
     shipperCounts[key] = (shipperCounts[key] || 0) + 1;
   });
@@ -3335,6 +3389,38 @@ function renderLoadedMarksTable(marksSubset) {
   `;
 }
 
+
+function renderUnmappedShipperNosCard() {
+  const entries = Object.entries(unmappedNoCounts || {}).sort((a,b)=>b[1]-a[1]);
+  if (!entries.length) return '';
+
+  const rows = entries.map(([no,count]) => `
+    <tr>
+      <td><strong>${esc(no)}</strong></td>
+      <td>${count}</td>
+    </tr>
+  `).join('');
+
+  return `
+    <div class="card" style="margin-top:8px;">
+      <h4 style="margin:0 0 6px;font-size:13px;">Unmapped Shipper #s (this report)</h4>
+      <p class="muted" style="margin:0 0 6px; font-size:12px;">These shipper numbers appear on marks but do not exist in your Shippers list.</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Shipper #</th>
+              <th>Marks</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+
   const periodLabel = (() => {
   if (currentReportPeriod === 'daily') return 'Daily Report';
   if (currentReportPeriod === 'weekly') return 'Weekly Report';
@@ -3367,6 +3453,7 @@ function renderLoadedMarksTable(marksSubset) {
   ${renderShipperMapManager()}
 
   ${renderShipperStatsCard()}
+  ${renderUnmappedShipperNosCard()}
   ${renderTimelinessByShipperCard()}
   ${renderTimelinessByShipperTypeCard()}
   ${renderTimelinessByTypeCard()}
@@ -3527,6 +3614,8 @@ function unCancelMark(id) {
   if (!ok) return;
 
   m.cancelled = false;
+  cancelledIds.delete(String(m.id));
+  saveCancelledIds();
   // Keep cancelledDate as history; you can clear if you want:
   // m.cancelledDate = '';
 
@@ -3724,6 +3813,9 @@ baleCount,
   const today = new Date().toISOString().slice(0, 10);
   m.cancelled = true;
   m.cancelledDate ||= today;
+
+  cancelledIds.add(String(m.id));
+  saveCancelledIds();
 
   // Optional: if it was previously "Loaded", keep the history but it's still considered canceled going forward.
   saveData();
@@ -4046,7 +4138,7 @@ function deleteMark(id) {
 
   const q = String(inputEl?.value || '').trim().toLowerCase();
 
-  const filtered = (marks || []).filter(m => !m.cancelled)
+  const filtered = (marks || []).filter(m => !(m.cancelled === true || m.cancelled === 'TRUE' || m.cancelled === 'true'))
     .filter(m => {
       if (!q) return true;
 
@@ -4128,7 +4220,7 @@ function deleteMark(id) {
 
   // Hide marks that are cleared AND completed/completed breaking
   const filtered = marks
-    .filter(m => !m.cancelled)
+    .filter(m => !(m.cancelled === true || m.cancelled === 'TRUE' || m.cancelled === 'true'))
     .filter(m => !(
       m.cleared &&
       (m.breakStatus === 'Completed' || m.breakStatus === 'Completed Breaking')
@@ -4462,7 +4554,7 @@ function closeQrScanner() {
 
       // Loading = cleared + break completed
       const filtered = marks
-        .filter(m => !m.cancelled)
+        .filter(m => !(m.cancelled === true || m.cancelled === 'TRUE' || m.cancelled === 'true'))
         .filter(m =>
           m.cleared &&
           (m.breakStatus === 'Completed' || m.breakStatus === 'Completed Breaking')
@@ -4691,6 +4783,9 @@ function getCalendarTooltip(m) {
   const grid = document.getElementById('calendarGrid');
   if (!monthYearEl || !grid) return;
 
+  // Hide canceled marks everywhere on calendar
+  const activeMarks = (marks || []).filter(m => !isCancelled(m));
+
   monthYearEl.textContent =
     monthNames[currentCalendarMonth] + ' ' + currentCalendarYear;
 
@@ -4698,7 +4793,7 @@ function getCalendarTooltip(m) {
   // ===== Shipper pickup summary (outstanding, not loaded) =====
   const sumEl = document.getElementById('calendarShipperSummary');
   if (sumEl) {
-    const outstanding = (marks || []).filter(m => m && !m.cancelled && m.loadingStatus !== 'Loaded');
+    const outstanding = (activeMarks || []).filter(m => m && !isCancelled(m) && m.loadingStatus !== 'Loaded');
     const byShipper = {};
     let withNo = 0;
     let withUnmapped = 0;
@@ -4745,7 +4840,10 @@ function getCalendarTooltip(m) {
 
   // ===== Daily bale totals (by Date To Load) =====
   const dailyTotals = {};
-  marks.forEach(m => {
+  activeMarks.forEach(m => {
+    if (isCancelled(m)) return;
+    if (m && (m.cancelled === true || m.cancelled === 'TRUE' || m.cancelled === 'true')) return;
+    if (m && (m.cancelled === true || m.cancelled === 'TRUE' || m.cancelled === 'true')) return;
     const ds = String(m.dateToLoad || '').trim();
     if (!ds) return;
     const bc = Number(m.baleCount) || 0;
@@ -4776,7 +4874,7 @@ const todayStr = getLocalTodayStr();
 
   for (let day = 1; day <= daysInMonth; day++) {
     const dateStr = fmtDate(currentCalendarYear, currentCalendarMonth, day);
-    const todaysMarks = marks.filter(m => (m.dateToLoad || '') === dateStr);
+    const todaysMarks = activeMarks.filter(m => (m.dateToLoad || '') === dateStr);
 
     
     const totalBales = dailyTotals[dateStr] || 0;
@@ -4878,7 +4976,9 @@ renderOutsideCalendarList();
 
   const rows = [];
 
-  marks.forEach(m => {
+  activeMarks.forEach(m => {
+    if (isCancelled(m)) return;
+    if (m && (m.cancelled === true || m.cancelled === 'TRUE' || m.cancelled === 'true')) return;
     if (!m.location) return;
     if (m.loadingStatus === 'Loaded') return;
     if (!isInBreakTable(m) && !isInLoadingTable(m)) return;
@@ -4958,7 +5058,8 @@ renderOutsideCalendarList();
     document.addEventListener('DOMContentLoaded', async () => {
       initTabs();
       initCalendarState();
-      loadShipperMap();
+      loadCancelledIds();
+  loadShipperMap();
       await loadMarksFromSheets();
       setInterval(() => {
   if (!isUserEditing) {
