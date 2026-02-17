@@ -1016,6 +1016,36 @@ body.printing-audit .print-only{ display:block; padding: 18px; background:#fff; 
 .print-audit-table tr.phase-break .phase-mark{ color:#6fa3ff; }
 .print-audit-table tr.phase-loading .phase-mark{ color:#6fdc8b; }
 
+
+/* Collapsible report blocks */
+.report-fold {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  margin: 10px 0;
+  overflow: hidden;
+}
+.report-fold > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 10px 12px;
+  font-weight: 800;
+  font-size: 12px;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.report-fold > summary::-webkit-details-marker { display: none; }
+.report-fold > summary::before {
+  content: "▸";
+  font-weight: 900;
+  transform: translateY(-1px);
+}
+.report-fold[open] > summary::before { content: "▾"; }
+.report-fold .report-body { padding: 10px 12px; }
+
 </style>
 </head>
 <body>
@@ -2138,6 +2168,51 @@ if (!list.length) {
 
 	// ====== REPORT HELPERS ======
 
+// Collapsible report block helper
+function fold(title, bodyHtml, open = false) {
+  return `
+    <details class="report-fold" ${open ? 'open' : ''}>
+      <summary>${title}</summary>
+      <div class="report-body">${bodyHtml}</div>
+    </details>
+  `;
+}
+
+
+function makeReportCollapsibleBlocks(html) {
+  // Turns:
+  // <h4>Title</h4> ... <h4>Next</h4> ...
+  // into <details><summary>Title</summary>...</details>
+  if (!html) return html;
+
+  const parts = html.split(/<h4[^>]*>/i);
+  if (parts.length === 1) return html;
+
+  // First chunk is before the first h4 (keep it as-is)
+  let out = parts[0];
+
+  for (let i = 1; i < parts.length; i++) {
+    const chunk = parts[i];
+    const endTitle = chunk.indexOf('</h4>');
+    if (endTitle === -1) {
+      out += chunk;
+      continue;
+    }
+    const title = chunk.slice(0, endTitle).replace(/<[^>]+>/g, '').trim();
+    const body = chunk.slice(endTitle + 5); // after </h4>
+
+    // Default: open the first 2 sections for convenience
+    const open = (i <= 2);
+
+    out += fold(title || `Section ${i}`, body, open);
+  }
+
+  return out;
+}
+
+
+
+
 let currentReportPeriod = 'daily'; // 'daily' | 'weekly' | 'monthly'
 let customReportRange = { start: '', end: '' }; // YYYY-MM-DD strings
 
@@ -2230,29 +2305,13 @@ async function saveShipperMapRemote() {
       shipperName: String(shipperName ?? '').trim()
     })).filter(x => x.shipperNo);
 
-    // IMPORTANT: Avoid CORS preflight by NOT sending application/json headers.
-    // Sending a plain string body uses Content-Type: text/plain;charset=UTF-8 (a "simple" request),
-    // which Apps Script can still read via e.postData.contents.
-    const res = await fetch(`${API_BASE}?action=saveShippers`, {
+    await fetch(`${API_BASE}?action=saveShippers`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ shippers })
     });
-
-    // If the deployment is correct, this should be readable JSON.
-    let data = null;
-    try { data = await res.json(); } catch (e) {}
-
-    if (!res.ok || (data && data.error)) {
-      console.error('saveShippers failed', res.status, data);
-      alert('Save to Shippers sheet failed. In Apps Script: Deploy → Manage deployments → Edit → select NEW VERSION → Deploy. Also ensure access is "Anyone".');
-      return false;
-    }
-
-    return true;
   } catch (e) {
-    console.error('saveShippers error', e);
-    alert('Save to Shippers sheet failed (network/CORS). This usually means the request triggered CORS rules. Make sure you are using the latest v25 file and your Apps Script deployment is set to "Anyone".');
-    return false;
+    // ignore
   }
 }
 
@@ -2271,24 +2330,22 @@ function getShipperName(no) {
   const key = normShipperNo(no);
   return key && shipperMap && shipperMap[key] ? shipperMap[key] : '';
 }
-async function addShipperMapping(no, name) {
+function addShipperMapping(no, name) {
   const k = normShipperNo(no);
   const n = String(name ?? '').trim();
   if (!k || !n) return;
   shipperMap[k] = n;
   saveShipperMap();
-  const ok = await saveShipperMapRemote();
-  if (ok) await loadShipperMapRemote();
+  saveShipperMapRemote();
   renderReports();
   renderCalendar();
 }
-async function removeShipperMapping(no) {
+function removeShipperMapping(no) {
   const k = normShipperNo(no);
   if (!k) return;
   delete shipperMap[k];
   saveShipperMap();
-  const ok = await saveShipperMapRemote();
-  if (ok) await loadShipperMapRemote();
+  saveShipperMapRemote();
   renderReports();
   renderCalendar();
 }
@@ -3203,42 +3260,72 @@ if (activeSubset.length === 0) {
   }
 
   function renderTimelinessByShipperTypeCard() {
+    // Replaces the old "On-time vs Late (by shipper & load type)" table with a
+    // shipper load-type mix table (one row per shipper, load types as columns).
     const shipperEntries = Object.entries(timelinessByShipper);
     if (!shipperEntries.length) return '';
-    const flat = [];
-    shipperEntries.forEach(([shipper, s]) => {
-      Object.entries(s.byType || {}).forEach(([type, t]) => {
-        if (!t || !t.evaluated) return;
-        flat.push({ shipper, type, ...t });
-      });
-    });
-    if (!flat.length) return '';
-    flat.sort((a,b) => (a.shipper.localeCompare(b.shipper)) || ((b.evaluated||0)-(a.evaluated||0)) || a.type.localeCompare(b.type));
-    const rows = flat.map(r => `
-      <tr>
-        <td>${esc(r.shipper)}</td>
-        <td>${esc(r.type)}</td>
-        <td>${r.evaluated}</td>
-        <td>${r.onTime}</td>
-        <td>${formatPercent(r.onTime, r.evaluated)}</td>
-        <td>${r.late}</td>
-        <td>${formatPercent(r.late, r.evaluated)}</td>
-      </tr>
-    `).join('');
+
+    function bucketType(raw) {
+      const t = (raw || '').toString().trim().toLowerCase();
+      if (t === 'van') return 'Van';
+      if (t === 'flatbed') return 'Flatbed';
+      if (t === 'container') return 'Container';
+      // treat blanks/unspecified/anything else as Other
+      return 'Other';
+    }
+
+    const rows = shipperEntries
+      .map(([shipper, s]) => {
+        const counts = { Van: 0, Flatbed: 0, Container: 0, Other: 0 };
+        let total = 0;
+
+        Object.entries(s.byType || {}).forEach(([type, t]) => {
+          const evalCount = (t && t.evaluated) ? Number(t.evaluated) : 0;
+          if (!evalCount) return;
+          const bucket = bucketType(type);
+          counts[bucket] += evalCount;
+          total += evalCount;
+        });
+
+        if (!total) return null;
+
+        return `
+          <tr>
+            <td>${esc(shipper)}</td>
+            <td>${total}</td>
+            <td>${counts.Van}</td>
+            <td>${formatPercent(counts.Van, total)}</td>
+            <td>${counts.Flatbed}</td>
+            <td>${formatPercent(counts.Flatbed, total)}</td>
+            <td>${counts.Container}</td>
+            <td>${formatPercent(counts.Container, total)}</td>
+            <td>${counts.Other}</td>
+            <td>${formatPercent(counts.Other, total)}</td>
+          </tr>
+        `;
+      })
+      .filter(Boolean)
+      .join('');
+
+    if (!rows) return '';
+
     return `
       <div class="card" style="margin-top:8px;">
-        <h4 style="margin:0 0 4px;font-size:13px;">On-time vs Late (by shipper & load type)</h4>
+        <h4 style="margin:0 0 4px;font-size:13px;">Load Type Mix (by shipper)</h4>
         <p class="muted" style="margin:0 0 6px; font-size:12px;">Mapped shippers only. Evaluates only marks with both Date To Load and Date Loaded.</p>
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
                 <th>Shipper</th>
-                <th>Load Type</th>
-                <th>Eval</th>
-                <th>On-Time</th>
+                <th>Total</th>
+                <th>Van</th>
                 <th>%</th>
-                <th>Late</th>
+                <th>Flatbed</th>
+                <th>%</th>
+                <th>Container</th>
+                <th>%</th>
+                <th>Other</th>
                 <th>%</th>
               </tr>
             </thead>
@@ -3370,10 +3457,8 @@ function renderLoadedMarksTable(marksSubset) {
     .map(m => `
       <tr>
         <td><strong>${esc(m.mark || '')}</strong></td>
-          <td>${esc(m.route || '')}</td>
-          <td>${esc(m.orderId || '')}</td>
-          <td>${esc(m.shipperNo || '')}</td>
-          <td>${esc(m.baleCount ?? '')}</td>
+        <td>${esc(m.orderId || '')}</td>
+        <td>${esc(m.baleCount ?? '')}</td>
         <td>${esc(m.dateLoaded || '')}</td>
         <td>${esc(m.containerType || '')}</td>
         <td>${esc(m.loadedBy || '')}</td>
