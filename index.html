@@ -1499,6 +1499,17 @@ document.addEventListener("focusout", () => {
     function normalizeMarkFromServer(copy) {
       copy = { ...copy };
 
+      // ✅ coerce common fields to safe types (prevents localeCompare crashes)
+      copy.mark     = (copy.mark == null) ? '' : String(copy.mark).trim();
+      copy.orderId  = (copy.orderId == null) ? '' : String(copy.orderId).trim();
+      copy.route    = (copy.route == null) ? '' : String(copy.route);
+      copy.shipperNo= (copy.shipperNo == null) ? '' : String(copy.shipperNo).trim();
+      copy.location = (copy.location == null) ? '' : String(copy.location);
+      if (copy.baleCount != null && copy.baleCount !== '') {
+        const bc = parseInt(String(copy.baleCount).replace(/[^\d-]/g,''), 10);
+        copy.baleCount = Number.isFinite(bc) ? bc : copy.baleCount;
+      }
+
       // normalize dates
       copy.dateToLoad    = normalizeDateString(copy.dateToLoad);
       copy.dateCompleted = normalizeDateString(copy.dateCompleted);
@@ -2102,7 +2113,7 @@ function renderOutsideCalendarList() {
       const aDt = (a.dateToLoad || '9999-12-31');
       const bDt = (b.dateToLoad || '9999-12-31');
       if (aDt !== bDt) return aDt.localeCompare(bDt);
-      return (a.mark || '').localeCompare(b.mark || '');
+      return String(a.mark || '').localeCompare(String(b.mark || ''), undefined, { numeric: true, sensitivity: 'base' });
     });
 
   const totals = {
@@ -4682,7 +4693,7 @@ function closeQrScanner() {
           .sort((a, b) => {
             const aDate = a.dateToLoad || '9999-12-31';
             const bDate = b.dateToLoad || '9999-12-31';
-            if (aDate === bDate) return (a.mark || '').localeCompare(b.mark || '');
+            if (aDate === bDate) return String(a.mark || '').localeCompare(String(b.mark || ''), undefined, { numeric: true, sensitivity: 'base' });
             return aDate.localeCompare(bDate);
           });
 
@@ -4731,7 +4742,7 @@ function closeQrScanner() {
       const filtered = marks
         .filter(m => (m.loadingStatus || '') === 'Loaded')
         .slice()
-        .sort((a, b) => (a.mark || '').localeCompare(b.mark || ''))
+        .sort((a, b) => String(a.mark || '').localeCompare(String(b.mark || ''), undefined, { numeric: true, sensitivity: 'base' }))
         .filter(m => {
           if (!q) return true;
           return (
