@@ -1106,7 +1106,7 @@ body.printing-audit .print-only{ display:block; padding: 18px; background:#fff; 
               </div>
               <div class="input-row">
                 <label>Route</label>
-                <input id="route" class="input-small" placeholder="e.g. LBB → OKC" />
+                <input id="route" class="input-small" placeholder="e.g. TRK, CON" />
               </div>
               <div class="input-row">
                 <label>Shipper #</label>
@@ -1126,7 +1126,7 @@ body.printing-audit .print-only{ display:block; padding: 18px; background:#fff; 
               </div>
               <div class="input-row">
                 <label>
-                  <input id="readyToBreak" type="checkbox" /> Ready to Break
+                  <input id="readyToBreak" type="checkbox" hidden />
                 </label>
               </div>
               <div class="input-row">
@@ -5438,12 +5438,12 @@ function printWarehouseChecklist() {
 
         <div class="drawer-field">
           <label>Order ID</label>
-          <input id="ld_orderId" />
+          <input id="ld_orderId" disabled />
         </div>
 
         <div class="drawer-field">
           <label>Bale Count</label>
-          <input id="ld_baleCount" type="number" />
+          <input id="ld_baleCount" type="number" disabled />
         </div>
 
         <div class="drawer-field">
@@ -5471,12 +5471,22 @@ function printWarehouseChecklist() {
 
         <div class="drawer-field">
           <label>Loaded By</label>
-          <input id="ld_loadedBy" />
+          <Select id="ld_loadedBy" >
+			<option value="Tony">Tony</option>
+			<option value="Roman">Roman</option>
+			<option value="Junior">Junior</option>
+			<option value="Sean">Sean</option>
+			<option value="Oscar">Oscar</option>
+		  </select>
         </div>
 
         <div class="drawer-field">
-          <label>Container</label>
-          <input id="ld_containerType" />
+          <label>Trailer Type</label>
+          <select id="ld_containerType" >
+			<option value="Container">Container</option>
+			<option value="Flatbed">Flatbed</option>
+			<option value="Van">Van</option>
+			</select>
         </div>
 
         <div class="drawer-field">
@@ -5490,13 +5500,13 @@ function printWarehouseChecklist() {
         </div>
 
         <div class="drawer-field">
-          <label>Driver</label>
-          <input id="ld_driverName" />
+          <label> </label>
+          <input id="ld_driverName" hidden />
         </div>
 
         <div class="drawer-field">
-          <label>Driver Phone</label>
-          <input id="ld_driverPhone" />
+          <label> </label>
+          <input id="ld_driverPhone" hidden />
         </div>
       </div>
     </div>
